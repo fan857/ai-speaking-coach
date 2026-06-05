@@ -7,54 +7,125 @@ const port = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-const mockPracticeResults = {
-  interview: {
+const scenarioHandlers = {
+  interview: buildInterviewResult,
+  restaurant: buildRestaurantResult,
+  meeting: buildMeetingResult
+};
+
+function normalizeSentence(transcript) {
+  const compact = transcript.replace(/\s+/g, " ").replace(/\s*,\s*/g, ", ").trim();
+  const capitalized = compact.charAt(0).toUpperCase() + compact.slice(1);
+  return /[.!?]$/.test(capitalized) ? capitalized : `${capitalized}.`;
+}
+
+function buildScores({ fluency, pronunciation, grammar, naturalness }) {
+  return { fluency, pronunciation, grammar, naturalness };
+}
+
+function buildInterviewResult(transcript) {
+  const lowerText = transcript.toLowerCase();
+
+  if (lowerText.includes("secret") || lowerText.includes("sorry")) {
+    return {
+      aiReply:
+        "That's okay. In an interview, you can briefly explain what you can share and then describe your own contribution.",
+      correction: {
+        original: transcript,
+        improved: normalizeSentence(transcript),
+        reason: "面试中可以礼貌说明保密限制，但最好补充你能公开分享的职责和成果。"
+      },
+      scores: buildScores({
+        fluency: 68,
+        pronunciation: 72,
+        grammar: 70,
+        naturalness: 62
+      })
+    };
+  }
+
+  return {
     aiReply:
-      "That sounds interesting. What was the biggest challenge you faced, and how did you solve it?",
+      "Good start. Could you add one concrete result, such as user growth, performance improvement, or what you personally delivered?",
     correction: {
-      original: "I am very interest in frontend develop.",
-      improved: "I am very interested in frontend development.",
-      reason:
-        "am 后面应使用形容词 interested；表达前端开发领域时，development 更自然。"
+      original: transcript,
+      improved: normalizeSentence(transcript),
+      reason: "面试回答建议加入可量化结果，让项目介绍更有说服力。"
     },
-    scores: {
+    scores: buildScores({
       fluency: 82,
       pronunciation: 78,
-      grammar: 74,
+      grammar: 76,
       naturalness: 80
-    }
-  },
-  restaurant: {
-    aiReply:
-      "Great choice. Would you like anything else with your sandwich, such as soup or salad?",
+    })
+  };
+}
+
+function buildRestaurantResult(transcript) {
+  const lowerText = transcript.toLowerCase();
+  const orderedCoffee = lowerText.includes("coffee");
+
+  return {
+    aiReply: orderedCoffee
+      ? "Sure. Would you like your coffee hot or iced?"
+      : "Great choice. Would you like anything to drink with that?",
     correction: {
-      original: "I want order one coffee.",
-      improved: "I would like to order a coffee.",
-      reason: "点餐场景中 would like to order 更礼貌；a coffee 是更自然的数量表达。"
+      original: transcript,
+      improved: lowerText.includes("want order")
+        ? transcript.replace(/want order/i, "would like to order")
+        : normalizeSentence(transcript),
+      reason: "点餐场景中 would like to order 更礼貌，表达也更自然。"
     },
-    scores: {
-      fluency: 86,
-      pronunciation: 81,
-      grammar: 79,
-      naturalness: 84
-    }
-  },
-  meeting: {
+    scores: buildScores({
+      fluency: 84,
+      pronunciation: 80,
+      grammar: lowerText.includes("want order") ? 74 : 82,
+      naturalness: 83
+    })
+  };
+}
+
+function buildMeetingResult(transcript) {
+  const lowerText = transcript.toLowerCase();
+
+  if (lowerText.includes("secret")) {
+    return {
+      aiReply:
+        "No problem. Could you share a non-confidential update, such as your progress, blockers, or next steps?",
+      correction: {
+        original: transcript,
+        improved: normalizeSentence(transcript),
+        reason: "会议中如果内容保密，可以说明无法透露细节，并补充可公开的进展或下一步计划。"
+      },
+      scores: buildScores({
+        fluency: 70,
+        pronunciation: 74,
+        grammar: 72,
+        naturalness: 64
+      })
+    };
+  }
+
+  return {
     aiReply:
       "Thanks for the update. What support do you need from the team before the next milestone?",
     correction: {
-      original: "I have finish the task yesterday.",
-      improved: "I finished the task yesterday.",
-      reason: "yesterday 表示明确过去时间，应使用一般过去时 finished。"
+      original: transcript,
+      improved: lowerText.includes("have finish")
+        ? transcript.replace(/have finish/i, "finished")
+        : normalizeSentence(transcript),
+      reason: lowerText.includes("have finish")
+        ? "have finish 不符合完成时结构；如果有 yesterday 这类明确过去时间，通常使用一般过去时。"
+        : "会议汇报中建议表达清楚已完成内容、当前阻塞和下一步计划。"
     },
-    scores: {
+    scores: buildScores({
       fluency: 80,
       pronunciation: 76,
-      grammar: 72,
+      grammar: lowerText.includes("have finish") ? 72 : 80,
       naturalness: 77
-    }
-  }
-};
+    })
+  };
+}
 
 app.get("/api/health", (request, response) => {
   response.json({
@@ -68,7 +139,9 @@ app.post("/api/practice/mock", (request, response) => {
   const { scenarioId, transcript } = request.body;
   const normalizedTranscript = typeof transcript === "string" ? transcript.trim() : "";
 
-  if (!mockPracticeResults[scenarioId]) {
+  const buildPracticeResult = scenarioHandlers[scenarioId];
+
+  if (!buildPracticeResult) {
     return response.status(400).json({
       message: "不支持的练习场景。"
     });
@@ -83,7 +156,7 @@ app.post("/api/practice/mock", (request, response) => {
   response.json({
     scenarioId,
     transcript: normalizedTranscript,
-    ...mockPracticeResults[scenarioId]
+    ...buildPracticeResult(normalizedTranscript)
   });
 });
 

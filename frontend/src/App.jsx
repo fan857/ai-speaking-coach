@@ -34,6 +34,22 @@ const scoreLabels = {
   naturalness: "表达自然度"
 };
 
+async function requestMockPractice(payload) {
+  const requestOptions = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  };
+
+  try {
+    return await fetch("/api/practice/mock", requestOptions);
+  } catch {
+    return fetch("http://localhost:3001/api/practice/mock", requestOptions);
+  }
+}
+
 function ScoreBar({ label, value }) {
   return (
     <div className="score-row">
@@ -81,15 +97,9 @@ function App() {
     setErrorMessage("");
 
     try {
-      const response = await fetch("/api/practice/mock", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          scenarioId: selectedScenarioId,
-          transcript: trimmedInput
-        })
+      const response = await requestMockPractice({
+        scenarioId: selectedScenarioId,
+        transcript: trimmedInput
       });
 
       const data = await response.json();
@@ -101,7 +111,11 @@ function App() {
       setSubmittedText(data.transcript);
       setPracticeResult(data);
     } catch (error) {
-      setErrorMessage(error.message);
+      setErrorMessage(
+        error.message === "Failed to fetch"
+          ? "请求后端失败，请确认后端服务已启动：http://localhost:3001"
+          : error.message
+      );
     } finally {
       setIsSubmitting(false);
     }
