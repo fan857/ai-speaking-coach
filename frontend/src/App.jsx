@@ -38,7 +38,7 @@ function getSpeechRecognitionConstructor() {
   return window.SpeechRecognition || window.webkitSpeechRecognition;
 }
 
-async function requestMockPractice(payload) {
+async function requestCoachPractice(payload) {
   const requestOptions = {
     method: "POST",
     headers: {
@@ -48,10 +48,26 @@ async function requestMockPractice(payload) {
   };
 
   try {
-    return await fetch("/api/practice/mock", requestOptions);
+    return await fetch("/api/practice/coach", requestOptions);
   } catch {
-    return fetch("http://localhost:3001/api/practice/mock", requestOptions);
+    return fetch("http://localhost:3001/api/practice/coach", requestOptions);
   }
+}
+
+function getFeedbackSourceLabel(result) {
+  if (!result) {
+    return "提交后会显示反馈来源。";
+  }
+
+  if (result.source === "deepseek") {
+    return `DeepSeek 真实 AI 反馈${result.model ? `：${result.model}` : ""}`;
+  }
+
+  if (result.source === "openai") {
+    return `OpenAI 真实 AI 反馈${result.model ? `：${result.model}` : ""}`;
+  }
+
+  return "本地兜底反馈";
 }
 
 function ScoreBar({ label, value }) {
@@ -257,7 +273,7 @@ function App() {
     setErrorMessage("");
 
     try {
-      const response = await requestMockPractice({
+      const response = await requestCoachPractice({
         scenarioId: selectedScenarioId,
         transcript: trimmedInput
       });
@@ -289,7 +305,7 @@ function App() {
             <p className="eyebrow">七牛云 x XEngineer MVP</p>
             <h1>AI 英语口语陪练</h1>
           </div>
-          <div className="status-pill">Mock 模式</div>
+          <div className="status-pill">AI 陪练模式</div>
         </header>
 
         <section className="scenario-panel" aria-labelledby="scenario-title">
@@ -299,8 +315,8 @@ function App() {
             </p>
             <h2>{selectedScenario.title}</h2>
             <p className="muted">
-              与{selectedScenario.role}进行场景对话练习。当前 PR 通过后端 mock
-              API 返回 AI 回复、纠错和评分。
+              与{selectedScenario.role}进行场景对话练习。当前 PR 支持真实 AI
+              生成回复、纠错和评分，未配置 Key 时自动使用兜底反馈。
             </p>
           </div>
           <div className="scenario-tabs" role="tablist" aria-label="练习场景">
@@ -335,7 +351,7 @@ function App() {
                 <p>{submittedText}</p>
               </div>
             ) : (
-              <div className="empty-state">在下方输入一句英文，模拟语音识别结果。</div>
+              <div className="empty-state">在下方输入一句英文，或使用语音识别自动生成文本。</div>
             )}
 
             {practiceResult && (
@@ -362,7 +378,7 @@ function App() {
                 value={userInput}
               />
               <button className="submit-button" disabled={isSubmitting} type="submit">
-                {isSubmitting ? "提交中..." : "提交模拟语音"}
+                {isSubmitting ? "提交中..." : "获取 AI 反馈"}
               </button>
             </form>
 
@@ -388,7 +404,7 @@ function App() {
                     ? `正在录音：${recordingSeconds} 秒`
                     : audioUrl
                       ? `已生成录音：${recordingSeconds} 秒，约 ${Math.max(1, Math.round(audioBlobSize / 1024))} KB`
-                      : "点击“开始录音”采集一段真实语音，文本框仍用于模拟语音识别结果。"}
+                      : "点击“开始录音”采集一段真实语音，也可以使用“开始识别”自动生成文本。"}
                 </p>
               </div>
               {audioUrl && <audio controls src={audioUrl} />}
@@ -399,9 +415,17 @@ function App() {
 
           <aside className="feedback-stack">
             <section className="feedback-card">
+              <p className="section-label">反馈来源</p>
+              <p>
+                {getFeedbackSourceLabel(practiceResult)}
+              </p>
+              {practiceResult?.warning && <p className="warning-text">{practiceResult.warning}</p>}
+            </section>
+
+            <section className="feedback-card">
               <p className="section-label">AI 回复</p>
               <p>
-                {practiceResult ? practiceResult.aiReply : "提交一句模拟语音后，这里会展示 AI 回复。"}
+                {practiceResult ? practiceResult.aiReply : "提交文本后，这里会展示 AI 回复。"}
               </p>
             </section>
 
@@ -424,6 +448,19 @@ function App() {
                 </div>
               ) : (
                 <p>语法和表达建议会展示在这里。</p>
+              )}
+            </section>
+
+            <section className="feedback-card">
+              <p className="section-label">学习建议</p>
+              {practiceResult?.tips?.length ? (
+                <ul className="tips-list">
+                  {practiceResult.tips.map((tip) => (
+                    <li key={tip}>{tip}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>提交后会生成针对本轮表达的学习建议。</p>
               )}
             </section>
 
