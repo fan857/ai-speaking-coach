@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.qwen_realtime import router as qwen_realtime_router
 from app.routes import router
+from app.streaming import router as streaming_router
 
 
 def create_app() -> FastAPI:
@@ -15,5 +17,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(router)
+    app.include_router(qwen_realtime_router)
+    app.include_router(streaming_router)
 
     return app

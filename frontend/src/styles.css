@@ -338,6 +338,57 @@ textarea:disabled {
   background: #8da4de;
 }
 
+.realtime-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  border: 1px solid #bed6ff;
+  border-radius: 8px;
+  padding: 14px;
+  color: #16315d;
+  background: #f3f7ff;
+}
+
+.realtime-panel p {
+  margin-bottom: 0;
+  line-height: 1.5;
+}
+
+.realtime-button {
+  min-height: 46px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 18px;
+  color: #ffffff;
+  background: #2858d8;
+  font-weight: 800;
+}
+
+.realtime-button.active {
+  background: #b42318;
+}
+
+.realtime-button:disabled {
+  cursor: not-allowed;
+  background: #9aa8c4;
+}
+
+.realtime-copy {
+  border: 1px solid #d7e3f7;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #ffffff;
+}
+
+.realtime-copy span {
+  display: block;
+  margin-bottom: 4px;
+  color: #536173;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .error-text {
   margin: 12px 0 0;
   color: #b42318;
