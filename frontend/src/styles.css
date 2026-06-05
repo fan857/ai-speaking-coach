@@ -170,6 +170,18 @@ h2 {
   text-transform: uppercase;
 }
 
+.message-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.message-header span {
+  margin-bottom: 0;
+}
+
 .message p {
   margin-bottom: 0;
   line-height: 1.55;
@@ -404,6 +416,34 @@ textarea:disabled {
 
 .feedback-card {
   padding: 20px;
+}
+
+.feedback-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.feedback-title-row .section-label {
+  margin-bottom: 0;
+}
+
+.replay-button {
+  min-width: max-content;
+  border: 1px solid #c9d7e8;
+  border-radius: 6px;
+  padding: 5px 9px;
+  color: #2556d9;
+  background: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.replay-button:hover {
+  border-color: #2556d9;
+  background: #eef4ff;
 }
 
 .feedback-card p:last-child {
