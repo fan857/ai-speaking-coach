@@ -90,6 +90,7 @@ h2 {
 }
 
 .scenario-panel,
+.mode-panel,
 .conversation-panel,
 .feedback-card {
   border: 1px solid #d9e2ec;
@@ -105,6 +106,20 @@ h2 {
   gap: 24px;
   padding: 24px;
   margin-bottom: 24px;
+}
+
+.mode-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 24px;
+  margin-bottom: 24px;
+}
+
+.mode-panel p:last-child {
+  margin-bottom: 0;
+  color: #5f6d7c;
 }
 
 .scenario-tabs {
@@ -129,6 +144,30 @@ h2 {
 .scenario-tabs button.active {
   color: #ffffff;
   background: #2556d9;
+}
+
+.mode-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 4px;
+  border: 1px solid #d8e1eb;
+  border-radius: 8px;
+  background: #f7fafc;
+}
+
+.mode-tabs button {
+  min-width: 112px;
+  border: 0;
+  border-radius: 6px;
+  padding: 10px 14px;
+  color: #536173;
+  background: transparent;
+  font-weight: 700;
+}
+
+.mode-tabs button.active {
+  color: #ffffff;
+  background: #1b7895;
 }
 
 .conversation-grid {
@@ -310,6 +349,13 @@ textarea:disabled {
   color: #9a5b00;
   font-size: 0.92rem;
   font-weight: 700;
+}
+
+.muted-card {
+  margin-top: 8px;
+  color: #5f6d7c;
+  font-size: 0.92rem;
+  line-height: 1.5;
 }
 
 .tips-list {
@@ -506,11 +552,13 @@ textarea:disabled {
   }
 
   .topbar,
+  .mode-panel,
   .scenario-panel {
     flex-direction: column;
     align-items: stretch;
   }
 
+  .mode-tabs,
   .scenario-tabs {
     overflow-x: auto;
   }
@@ -530,16 +578,19 @@ textarea:disabled {
   }
 
   .scenario-panel,
+  .mode-panel,
   .conversation-panel,
   .feedback-card {
     padding: 16px;
   }
 
+  .mode-tabs,
   .scenario-tabs {
     display: grid;
     grid-template-columns: 1fr;
   }
 
+  .mode-tabs button,
   .scenario-tabs button {
     width: 100%;
   }

@@ -4,17 +4,17 @@ from app.schemas import ConversationMessage
 
 def format_history_for_prompt(history: list[ConversationMessage]) -> str:
     if not history:
-        return "暂无历史对话。这是本轮第一句。"
+        return "No previous conversation. This is the first user turn."
 
     recent_history = history[-8:]
     lines = []
     for index, message in enumerate(recent_history, start=1):
-        speaker = "用户" if message.role == "user" else "AI"
+        speaker = "User" if message.role == "user" else "AI"
         lines.append(f"{index}. {speaker}: {message.content}")
     return "\n".join(lines)
 
 
-def get_coach_prompt(scenario_id: str, transcript: str, history: list[ConversationMessage]) -> str:
+def get_feedback_prompt(scenario_id: str, transcript: str, history: list[ConversationMessage]) -> str:
     scenario = SCENARIOS[scenario_id]
     return "\n".join(
         [
@@ -37,3 +37,37 @@ def get_coach_prompt(scenario_id: str, transcript: str, history: list[Conversati
             "8. 只输出 JSON，不要输出 Markdown。",
         ]
     )
+
+
+def get_immersive_prompt(scenario_id: str, transcript: str, history: list[ConversationMessage]) -> str:
+    scenario = SCENARIOS[scenario_id]
+    return "\n".join(
+        [
+            "You are an immersive English speaking partner.",
+            f"Practice scenario: {scenario['name']}",
+            f"Your role: {scenario['aiRole']}",
+            f"Practice goal: {scenario['goal']}",
+            "Conversation history:",
+            format_history_for_prompt(history),
+            f"Latest user utterance: {transcript}",
+            "Respond only in natural spoken English.",
+            "Do not correct grammar during the conversation.",
+            "Do not mention scores, feedback, or learning suggestions.",
+            "Keep the reply concise, warm, and conversational.",
+            "Ask one natural follow-up question so the user can keep speaking.",
+            "Output JSON only with this shape:",
+            '{"aiReply": "your English reply"}',
+        ]
+    )
+
+
+def get_coach_prompt(
+    scenario_id: str,
+    transcript: str,
+    history: list[ConversationMessage],
+    mode: str = "feedback",
+) -> str:
+    if mode == "immersive":
+        return get_immersive_prompt(scenario_id, transcript, history)
+
+    return get_feedback_prompt(scenario_id, transcript, history)

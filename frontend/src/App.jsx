@@ -6,7 +6,7 @@ const scenarios = [
     label: "面试",
     title: "求职面试",
     role: "AI 面试官",
-    prompt: "请用英语介绍一个你最有成就感的项目。",
+    prompt: "Please introduce a project you are proud of.",
     placeholder: "示例：I built a small web app for practicing English..."
   },
   {
@@ -14,7 +14,7 @@ const scenarios = [
     label: "点餐",
     title: "餐厅点餐",
     role: "AI 服务员",
-    prompt: "欢迎光临！请用英语告诉我你今天想点什么。",
+    prompt: "Welcome! What would you like to order today?",
     placeholder: "示例：I would like a chicken sandwich and a cup of tea."
   },
   {
@@ -22,8 +22,21 @@ const scenarios = [
     label: "会议",
     title: "团队会议",
     role: "AI 同事",
-    prompt: "请用英语汇报一下你本周的工作进展。",
+    prompt: "Please give a quick update on your work this week.",
     placeholder: "示例：This week I finished the login page and fixed two bugs."
+  }
+];
+
+const practiceModes = [
+  {
+    id: "feedback",
+    label: "逐句反馈",
+    description: "每轮回复后立即展示纠错、评分和学习建议。"
+  },
+  {
+    id: "immersive",
+    label: "沉浸对话",
+    description: "AI 全程只用英文对话，结束后再统一总结。"
   }
 ];
 
@@ -63,10 +76,6 @@ function getFeedbackSourceLabel(result) {
     return `DeepSeek 真实 AI 反馈${result.model ? `：${result.model}` : ""}`;
   }
 
-  if (result.source === "openai") {
-    return `OpenAI 真实 AI 反馈${result.model ? `：${result.model}` : ""}`;
-  }
-
   return "本地兜底反馈";
 }
 
@@ -86,6 +95,7 @@ function ScoreBar({ label, value }) {
 
 function App() {
   const [selectedScenarioId, setSelectedScenarioId] = useState("interview");
+  const [practiceMode, setPracticeMode] = useState("feedback");
   const [userInput, setUserInput] = useState("");
   const [conversationMessages, setConversationMessages] = useState([]);
   const [practiceResult, setPracticeResult] = useState(null);
@@ -111,6 +121,11 @@ function App() {
     () => scenarios.find((scenario) => scenario.id === selectedScenarioId),
     [selectedScenarioId]
   );
+  const selectedMode = useMemo(
+    () => practiceModes.find((mode) => mode.id === practiceMode),
+    [practiceMode]
+  );
+  const isImmersiveMode = practiceMode === "immersive";
 
   useEffect(() => {
     return () => {
@@ -154,6 +169,11 @@ function App() {
 
   function handleScenarioChange(scenarioId) {
     setSelectedScenarioId(scenarioId);
+    resetConversation();
+  }
+
+  function handleModeChange(modeId) {
+    setPracticeMode(modeId);
     resetConversation();
   }
 
@@ -333,6 +353,7 @@ function App() {
     try {
       const response = await requestCoachPractice({
         scenarioId: selectedScenarioId,
+        mode: practiceMode,
         transcript: trimmedInput,
         history: buildHistoryPayload(conversationMessages)
       });
@@ -367,7 +388,11 @@ function App() {
     recognitionRef.current?.stop();
     window.speechSynthesis?.cancel();
     setIsConversationEnded(true);
-    setSpeechStatus("对话已结束。本 PR 不生成课后总结，总结将在下一 PR 完成。");
+    setSpeechStatus(
+      isImmersiveMode
+        ? "沉浸对话已结束。本 PR 暂不生成总结，下一 PR 会基于全程对话生成点评。"
+        : "对话已结束。本 PR 不生成课后总结，总结将在下一 PR 完成。"
+    );
   }
 
   return (
@@ -378,7 +403,7 @@ function App() {
             <p className="eyebrow">七牛云 x XEngineer MVP</p>
             <h1>AI 英语口语陪练</h1>
           </div>
-          <div className="status-pill">AI 陪练模式</div>
+          <div className="status-pill">{selectedMode.label}</div>
         </header>
 
         <section className="scenario-panel" aria-labelledby="scenario-title">
@@ -388,7 +413,9 @@ function App() {
             </p>
             <h2>{selectedScenario.title}</h2>
             <p className="muted">
-              与{selectedScenario.role}进行多轮英语口语对话。AI 会参考历史上下文继续追问，并在回复后自动英文朗读。
+              {isImmersiveMode
+                ? `与${selectedScenario.role}进行全英文沉浸对话。AI 不会打断纠错，先保证对话节奏。`
+                : `与${selectedScenario.role}进行多轮英语口语对话。AI 会回复、朗读并给出即时反馈。`}
             </p>
           </div>
           <div className="scenario-tabs" role="tablist" aria-label="练习场景">
@@ -400,6 +427,27 @@ function App() {
                 type="button"
               >
                 {scenario.label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="mode-panel" aria-labelledby="mode-title">
+          <div>
+            <p className="section-label" id="mode-title">
+              练习模式
+            </p>
+            <p>{selectedMode.description}</p>
+          </div>
+          <div className="mode-tabs" role="tablist" aria-label="练习模式">
+            {practiceModes.map((mode) => (
+              <button
+                className={mode.id === practiceMode ? "active" : ""}
+                key={mode.id}
+                onClick={() => handleModeChange(mode.id)}
+                type="button"
+              >
+                {mode.label}
               </button>
             ))}
           </div>
@@ -448,7 +496,11 @@ function App() {
             )}
 
             {isConversationEnded && (
-              <div className="end-state">本轮对话已结束。课后总结将在下一 PR 中生成。</div>
+              <div className="end-state">
+                {isImmersiveMode
+                  ? "沉浸对话已结束。下一 PR 会生成全程点评和加强训练重点。"
+                  : "本轮对话已结束。课后总结将在下一 PR 中生成。"}
+              </div>
             )}
 
             <form className="input-panel" onSubmit={handleSubmit}>
@@ -469,7 +521,7 @@ function App() {
                 value={userInput}
               />
               <button className="submit-button" disabled={isSubmitting || isConversationEnded} type="submit">
-                {isSubmitting ? "提交中..." : "发送并获取 AI 回复"}
+                {isSubmitting ? "提交中..." : isImmersiveMode ? "发送并继续英文对话" : "发送并获取 AI 回复"}
               </button>
             </form>
 
@@ -516,6 +568,12 @@ function App() {
 
           <aside className="feedback-stack">
             <section className="feedback-card">
+              <p className="section-label">当前模式</p>
+              <p>{selectedMode.label}</p>
+              <p className="muted-card">{selectedMode.description}</p>
+            </section>
+
+            <section className="feedback-card">
               <p className="section-label">反馈来源</p>
               <p>{getFeedbackSourceLabel(practiceResult)}</p>
               {practiceResult?.warning && <p className="warning-text">{practiceResult.warning}</p>}
@@ -542,53 +600,62 @@ function App() {
               <p>{practiceResult ? practiceResult.aiReply : "提交文本后，这里会展示 AI 回复。"}</p>
             </section>
 
-            <section className="feedback-card">
-              <p className="section-label">纠错反馈</p>
-              {practiceResult ? (
-                <div className="correction">
-                  <div>
-                    <span>原句</span>
-                    <p>{practiceResult.correction.original}</p>
-                  </div>
-                  <div>
-                    <span>更自然表达</span>
-                    <p>{practiceResult.correction.improved}</p>
-                  </div>
-                  <div>
-                    <span>原因</span>
-                    <p>{practiceResult.correction.reason}</p>
-                  </div>
-                </div>
-              ) : (
-                <p>语法和表达建议会展示在这里。</p>
-              )}
-            </section>
+            {isImmersiveMode ? (
+              <section className="feedback-card">
+                <p className="section-label">沉浸对话说明</p>
+                <p>当前模式不进行即时纠错和评分，先保证英语对话流畅。点击“结束对话”后，下一 PR 会生成全程点评和训练重点。</p>
+              </section>
+            ) : (
+              <>
+                <section className="feedback-card">
+                  <p className="section-label">纠错反馈</p>
+                  {practiceResult ? (
+                    <div className="correction">
+                      <div>
+                        <span>原句</span>
+                        <p>{practiceResult.correction.original}</p>
+                      </div>
+                      <div>
+                        <span>更自然表达</span>
+                        <p>{practiceResult.correction.improved}</p>
+                      </div>
+                      <div>
+                        <span>原因</span>
+                        <p>{practiceResult.correction.reason}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p>语法和表达建议会展示在这里。</p>
+                  )}
+                </section>
 
-            <section className="feedback-card">
-              <p className="section-label">学习建议</p>
-              {practiceResult?.tips?.length ? (
-                <ul className="tips-list">
-                  {practiceResult.tips.map((tip) => (
-                    <li key={tip}>{tip}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p>提交后会生成针对本轮表达的学习建议。</p>
-              )}
-            </section>
+                <section className="feedback-card">
+                  <p className="section-label">学习建议</p>
+                  {practiceResult?.tips?.length ? (
+                    <ul className="tips-list">
+                      {practiceResult.tips.map((tip) => (
+                        <li key={tip}>{tip}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>提交后会生成针对本轮表达的学习建议。</p>
+                  )}
+                </section>
 
-            <section className="feedback-card">
-              <p className="section-label">评分面板</p>
-              {practiceResult ? (
-                <div className="score-list">
-                  {Object.entries(practiceResult.scores).map(([key, value]) => (
-                    <ScoreBar key={key} label={scoreLabels[key]} value={value} />
-                  ))}
-                </div>
-              ) : (
-                <p>流利度、发音清晰度、语法、表达自然度评分会展示在这里。</p>
-              )}
-            </section>
+                <section className="feedback-card">
+                  <p className="section-label">评分面板</p>
+                  {practiceResult ? (
+                    <div className="score-list">
+                      {Object.entries(practiceResult.scores).map(([key, value]) => (
+                        <ScoreBar key={key} label={scoreLabels[key]} value={value} />
+                      ))}
+                    </div>
+                  ) : (
+                    <p>流利度、发音清晰度、语法、表达自然度评分会展示在这里。</p>
+                  )}
+                </section>
+              </>
+            )}
           </aside>
         </section>
       </section>
