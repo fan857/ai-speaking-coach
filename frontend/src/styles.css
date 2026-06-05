@@ -257,6 +257,17 @@ textarea:focus {
   background: #2556d9;
 }
 
+.submit-button:disabled {
+  cursor: not-allowed;
+  background: #8da4de;
+}
+
+.error-text {
+  margin: 12px 0 0;
+  color: #b42318;
+  font-weight: 700;
+}
+
 .feedback-stack {
   display: grid;
   gap: 16px;
