@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 const scenarios = [
   {
@@ -71,17 +71,111 @@ function App() {
   const [practiceResult, setPracticeResult] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [audioUrl, setAudioUrl] = useState("");
+  const [audioBlobSize, setAudioBlobSize] = useState(0);
+  const mediaRecorderRef = useRef(null);
+  const mediaStreamRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordingTimerRef = useRef(null);
+  const audioUrlRef = useRef("");
 
   const selectedScenario = useMemo(
     () => scenarios.find((scenario) => scenario.id === selectedScenarioId),
     [selectedScenarioId]
   );
 
+  useEffect(() => {
+    return () => {
+      clearInterval(recordingTimerRef.current);
+      stopMediaStream();
+
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+      }
+    };
+  }, []);
+
+  function updateAudioUrl(nextAudioUrl) {
+    audioUrlRef.current = nextAudioUrl;
+    setAudioUrl(nextAudioUrl);
+  }
+
+  function stopMediaStream() {
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    mediaStreamRef.current = null;
+  }
+
+  function clearRecordingTimer() {
+    clearInterval(recordingTimerRef.current);
+    recordingTimerRef.current = null;
+  }
+
   function handleScenarioChange(scenarioId) {
     setSelectedScenarioId(scenarioId);
     setSubmittedText("");
     setPracticeResult(null);
     setErrorMessage("");
+  }
+
+  async function handleRecordClick() {
+    if (isRecording) {
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setErrorMessage("当前浏览器不支持录音，请换用最新版 Chrome 或 Edge。");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+      }
+
+      audioChunksRef.current = [];
+      mediaStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+      updateAudioUrl("");
+      setAudioBlobSize(0);
+      setRecordingSeconds(0);
+      setErrorMessage("");
+
+      recorder.addEventListener("dataavailable", (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      });
+
+      recorder.addEventListener("stop", () => {
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || "audio/webm"
+        });
+
+        updateAudioUrl(URL.createObjectURL(audioBlob));
+        setAudioBlobSize(audioBlob.size);
+        setIsRecording(false);
+        clearRecordingTimer();
+        stopMediaStream();
+      });
+
+      recorder.start();
+      setIsRecording(true);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((seconds) => seconds + 1);
+      }, 1000);
+    } catch (error) {
+      setErrorMessage(
+        error.name === "NotAllowedError"
+          ? "麦克风权限被拒绝，请允许浏览器使用麦克风。"
+          : "无法启动录音，请检查麦克风是否可用。"
+      );
+    }
   }
 
   async function handleSubmit(event) {
@@ -186,9 +280,14 @@ function App() {
             )}
 
             <form className="input-panel" onSubmit={handleSubmit}>
-              <button className="record-button" type="button" aria-label="录音按钮占位">
+              <button
+                className={isRecording ? "record-button recording" : "record-button"}
+                onClick={handleRecordClick}
+                type="button"
+                aria-label={isRecording ? "停止录音" : "开始录音"}
+              >
                 <span className="record-dot" />
-                录音占位
+                {isRecording ? "停止录音" : "开始录音"}
               </button>
               <textarea
                 onChange={(event) => setUserInput(event.target.value)}
@@ -200,6 +299,20 @@ function App() {
                 {isSubmitting ? "提交中..." : "提交模拟语音"}
               </button>
             </form>
+
+            <div className="recording-panel">
+              <div>
+                <p className="section-label">录音状态</p>
+                <p>
+                  {isRecording
+                    ? `正在录音：${recordingSeconds} 秒`
+                    : audioUrl
+                      ? `已生成录音：${recordingSeconds} 秒，约 ${Math.max(1, Math.round(audioBlobSize / 1024))} KB`
+                      : "点击“开始录音”采集一段真实语音，文本框仍用于模拟语音识别结果。"}
+                </p>
+              </div>
+              {audioUrl && <audio controls src={audioUrl} />}
+            </div>
 
             {errorMessage && <p className="error-text">{errorMessage}</p>}
           </div>

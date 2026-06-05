@@ -227,11 +227,20 @@ h2 {
   background: #fff0ed;
 }
 
+.record-button.recording {
+  color: #ffffff;
+  background: #c9362b;
+}
+
 .record-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   background: #e24b37;
+}
+
+.record-button.recording .record-dot {
+  background: #ffffff;
 }
 
 textarea {
@@ -266,6 +275,26 @@ textarea:focus {
   margin: 12px 0 0;
   color: #b42318;
   font-weight: 700;
+}
+
+.recording-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  padding: 14px;
+  background: #f8fbfe;
+}
+
+.recording-panel p {
+  margin-bottom: 0;
+  color: #536173;
+  line-height: 1.5;
+}
+
+.recording-panel audio {
+  width: 100%;
 }
 
 .feedback-stack {
