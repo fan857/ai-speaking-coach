@@ -277,6 +277,39 @@ textarea:focus {
   font-weight: 700;
 }
 
+.speech-panel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin-top: 16px;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  padding: 14px;
+  background: #ffffff;
+}
+
+.speech-panel p {
+  margin-bottom: 0;
+  color: #536173;
+  line-height: 1.5;
+}
+
+.speech-button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 18px;
+  color: #124d74;
+  background: #e8f4fb;
+  font-weight: 800;
+}
+
+.speech-button.active {
+  color: #ffffff;
+  background: #1b7895;
+}
+
 .recording-panel {
   display: grid;
   gap: 10px;
@@ -410,5 +443,9 @@ textarea:focus {
 
   .record-button {
     min-height: 44px;
+  }
+
+  .speech-panel {
+    grid-template-columns: 1fr;
   }
 }

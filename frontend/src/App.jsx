@@ -34,6 +34,10 @@ const scoreLabels = {
   naturalness: "表达自然度"
 };
 
+function getSpeechRecognitionConstructor() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition;
+}
+
 async function requestMockPractice(payload) {
   const requestOptions = {
     method: "POST",
@@ -75,11 +79,15 @@ function App() {
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [audioUrl, setAudioUrl] = useState("");
   const [audioBlobSize, setAudioBlobSize] = useState(0);
+  const [isRecognizing, setIsRecognizing] = useState(false);
+  const [recognitionStatus, setRecognitionStatus] =
+    useState("点击“开始识别”后，说出的英文会自动填入文本框。");
   const mediaRecorderRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordingTimerRef = useRef(null);
   const audioUrlRef = useRef("");
+  const recognitionRef = useRef(null);
 
   const selectedScenario = useMemo(
     () => scenarios.find((scenario) => scenario.id === selectedScenarioId),
@@ -94,6 +102,8 @@ function App() {
       if (audioUrlRef.current) {
         URL.revokeObjectURL(audioUrlRef.current);
       }
+
+      recognitionRef.current?.abort();
     };
   }, []);
 
@@ -117,6 +127,7 @@ function App() {
     setSubmittedText("");
     setPracticeResult(null);
     setErrorMessage("");
+    setRecognitionStatus("点击“开始识别”后，说出的英文会自动填入文本框。");
   }
 
   async function handleRecordClick() {
@@ -176,6 +187,61 @@ function App() {
           : "无法启动录音，请检查麦克风是否可用。"
       );
     }
+  }
+
+  function handleSpeechRecognitionClick() {
+    const SpeechRecognition = getSpeechRecognitionConstructor();
+
+    if (!SpeechRecognition) {
+      setErrorMessage("当前浏览器不支持语音识别，请换用最新版 Chrome 或 Edge。");
+      return;
+    }
+
+    if (isRecognizing) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+
+    recognition.onstart = () => {
+      setIsRecognizing(true);
+      setErrorMessage("");
+      setRecognitionStatus("正在识别，请用英语说一句话。");
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map((result) => result[0].transcript)
+        .join(" ")
+        .trim();
+
+      setUserInput(transcript);
+      setRecognitionStatus(event.results[event.results.length - 1].isFinal ? "识别完成。" : "正在生成识别文本...");
+    };
+
+    recognition.onerror = (event) => {
+      setIsRecognizing(false);
+      setRecognitionStatus("识别已停止。");
+      setErrorMessage(
+        event.error === "not-allowed"
+          ? "语音识别权限被拒绝，请允许浏览器使用麦克风。"
+          : "语音识别失败，请重试或手动输入文本。"
+      );
+    };
+
+    recognition.onend = () => {
+      setIsRecognizing(false);
+      setRecognitionStatus((currentStatus) =>
+        currentStatus === "正在识别，请用英语说一句话。" ? "未识别到内容，请重试。" : currentStatus
+      );
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
   }
 
   async function handleSubmit(event) {
@@ -299,6 +365,20 @@ function App() {
                 {isSubmitting ? "提交中..." : "提交模拟语音"}
               </button>
             </form>
+
+            <div className="speech-panel">
+              <button
+                className={isRecognizing ? "speech-button active" : "speech-button"}
+                onClick={handleSpeechRecognitionClick}
+                type="button"
+              >
+                {isRecognizing ? "停止识别" : "开始识别"}
+              </button>
+              <div>
+                <p className="section-label">语音识别</p>
+                <p>{recognitionStatus}</p>
+              </div>
+            </div>
 
             <div className="recording-panel">
               <div>
