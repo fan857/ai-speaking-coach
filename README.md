@@ -15,14 +15,16 @@
 - 支持多轮英语口语对话，AI 回复会参考历史对话上下文。
 - 支持浏览器 SpeechSynthesis 自动朗读和重新朗读 AI 英文回复。
 - 支持 DeepSeek 真实 AI 反馈。
+- 支持可选接入阿里云百炼 Qwen3.5-Omni-Realtime 实时语音对话。
+- 沉浸对话由 Qwen3.5-Omni-Realtime 负责；逐句反馈使用 Qwen ASR 转写后由 DeepSeek 生成完整纠错评分。
 - 未配置 `DEEPSEEK_API_KEY` 或真实 AI 请求失败时，自动使用本地 mock 兜底，保证 Demo 不会中断。
 
 ## 技术栈
 
 - 前端：React + Vite
 - 后端：Python + FastAPI
-- AI：DeepSeek + LangChain
-- 浏览器能力：MediaRecorder、Web Speech API、SpeechSynthesis
+- AI：DeepSeek + LangChain + Qwen3.5-Omni-Realtime（可选）
+- 浏览器能力：MediaRecorder、Web Audio API、SpeechSynthesis
 
 ## 本地运行
 
@@ -51,6 +53,9 @@ copy backend\.env.example backend\.env
 ```text
 DEEPSEEK_API_KEY=你的 DeepSeek API Key
 DEEPSEEK_MODEL=deepseek-v4-flash
+DASHSCOPE_API_KEY=你的阿里云百炼 API Key
+DASHSCOPE_REALTIME_MODEL=qwen3.5-omni-plus-realtime
+DASHSCOPE_REALTIME_VOICE=Tina
 ```
 
 注意：`backend/.env` 不要提交到 GitHub。`.env.example` 只保留空模板。
@@ -83,12 +88,14 @@ npm run build
 
 1. 在页面顶部选择练习场景：面试、点餐或会议。
 2. 选择练习模式：逐句反馈或沉浸对话。
-3. 点击“开始识别”，用英语说一句话，识别文本会自动填入文本框。
-4. 也可以直接编辑文本框内容。
-5. 点击发送按钮后，AI 会返回英文回复并自动朗读。
+3. 逐句反馈模式下，点击“录一句并识别”，Qwen ASR 会转写英文并自动生成纠错评分。
+4. 也可以直接编辑文本框内容后点击“获取完整纠错评分”。
+5. 沉浸对话模式下，点击“开始 Qwen 实时语音对话”后直接用英文对话。
 6. 逐句反馈模式会展示纠错、评分和学习建议。
 7. 沉浸对话模式不会即时纠错，先保证连续英文对话体验。
-8. 点击“结束对话”后停止本轮练习；全程总结将在后续 PR 完成。
+8. 点击“开始 Qwen 实时语音对话”后，直接用英文说话并听取实时语音回复。
+9. 需要纠错和评分时，可将文本提交到“获取完整纠错评分”。
+10. 点击“结束对话”后停止本轮练习；全程总结将在后续 PR 完成。
 
 ## PR 记录
 
@@ -146,13 +153,23 @@ npm run build
 - 后端 `POST /api/practice/coach` 支持 `mode=immersive`。
 - 保留 mock 兜底，真实 AI 失败时仍可继续英文对话。
 
+### PR 10：接入 Qwen3.5-Omni-Realtime 实时语音对话
+
+- 新增 `WebSocket /api/realtime/qwen`，由后端代理连接阿里云百炼实时语音模型。
+- 前端新增“开始 Qwen 实时语音对话”入口，采集麦克风音频并发送 PCM 流。
+- 后端隐藏 `DASHSCOPE_API_KEY`，前端不直接暴露第三方 API Key。
+- 前端播放模型返回的实时 PCM 音频，并展示实时识别文本和回复文本。
+- 保留 DeepSeek 完整反馈、浏览器语音识别和本地 fallback，保证未配置实时模型时仍可演示核心流程。
+
 ## 原创与依赖说明
 
-本项目代码为本次实训营题目创建的原创 MVP 实现，没有复制第三方项目代码。项目使用 React、Vite、FastAPI、LangChain、DeepSeek、uvicorn 等开源框架和库完成基础工程、页面、接口和 AI 调用。
+本项目代码为本次实训营题目创建的原创 MVP 实现，没有复制第三方项目代码。项目使用 React、Vite、FastAPI、LangChain、DeepSeek、Qwen3.5-Omni-Realtime、uvicorn、websockets 等开源框架、第三方模型和库完成基础工程、页面、接口、WebSocket 流式通信和 AI 调用。
 
-浏览器录音、语音识别和朗读依赖浏览器原生能力；Web Speech API 在不同浏览器支持程度不同，建议使用最新版 Chrome 或 Edge 演示。
+Qwen3.5-Omni-Realtime 提供实时语音理解和语音输出能力；项目原创部分包括场景化训练流程、后端代理封装、实时状态展示、练习模式切换、fallback 机制、反馈面板和 README 运行说明。
+
+浏览器录音、语音识别、句级朗读队列依赖浏览器原生能力；Web Speech API 在不同浏览器支持程度不同，建议使用最新版 Chrome 或 Edge 演示。
 
 ## 后续 PR
 
-- PR 10：结束对话后生成全程总结报告。
-- PR 11：优化语音识别到 AI 回复的自动闭环流畅度。
+- PR 11：结束对话后生成全程总结报告。
+- PR 12：接入真实云端 STT/TTS，替换当前浏览器识别和朗读兜底。
