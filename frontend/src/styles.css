@@ -277,6 +277,22 @@ textarea:focus {
   font-weight: 700;
 }
 
+.warning-text {
+  margin-top: 8px;
+  color: #9a5b00;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.tips-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: #3b4654;
+  line-height: 1.5;
+}
+
 .speech-panel {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

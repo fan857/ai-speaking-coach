@@ -52,11 +52,24 @@
 - 识别结果会自动填入文本框，可继续提交到后端 mock API。
 - 当前 PR 仍不接入真实大模型，AI 回复、纠错和评分仍由后端 mock API 返回。
 
+## PR 5 完成内容
+
+- 后端新增真实 AI 口语陪练接口：
+  - `POST /api/practice/coach`
+- 后端支持通过 DeepSeek V4 模型生成：
+  - 场景化英文 AI 回复
+  - 针对用户原句的纠错反馈
+  - 流利度、发音清晰度、语法、表达自然度评分
+  - 2 到 3 条学习建议
+- 前端提交后改为调用真实 AI 入口。
+- 页面展示反馈来源：真实 AI 反馈 / 本地兜底反馈。
+- 未配置 `DEEPSEEK_API_KEY` 或真实 AI 请求失败时，自动使用本地兜底反馈，保证演示不中断。
+
 ## 技术栈
 
 - 前端：React, Vite
-- 后端：Node.js, Express
-- 当前阶段：不接入真实 OpenAI API 或 TTS；已支持浏览器录音采集和浏览器语音识别，仍使用 mock 数据模拟 AI 反馈。
+- 后端：Python, FastAPI
+- 当前阶段：已支持浏览器录音采集、浏览器语音识别和真实 AI 反馈；暂未接入 TTS 和专业音素级发音评测。
 
 ## 原创与依赖说明
 
@@ -71,6 +84,27 @@
 ```bash
 npm run install:all
 ```
+
+如果只安装后端依赖：
+
+```bash
+python -m pip install -r backend/requirements.txt
+```
+
+配置真实 AI 能力：
+
+```bash
+copy backend\.env.example backend\.env
+```
+
+然后在 `backend/.env` 中填写：
+
+```text
+DEEPSEEK_API_KEY=你的 DeepSeek API Key
+DEEPSEEK_MODEL=deepseek-v4-flash
+```
+
+如果不配置 `DEEPSEEK_API_KEY`，系统会自动使用本地兜底反馈。也可以通过 `DEEPSEEK_MODEL=deepseek-v4-pro` 切换到更强模型。OpenAI 兼容配置仅在显式设置 `AI_PROVIDER=openai` 时启用，避免误连 OpenAI。
 
 启动前端：
 
@@ -109,11 +143,11 @@ npm run build
 3. 说完后点击“停止录音”，页面会生成音频回放。
 4. 点击“开始识别”，用英语说一句话，识别文本会自动填入文本框。
 5. 也可以直接编辑文本框内容。
-6. 点击“提交模拟语音”。
-7. 前端请求后端 mock API。
+6. 点击“获取 AI 反馈”。
+7. 前端请求后端 AI 口语陪练接口。
 8. 页面会展示 AI 回复、纠错建议和四项评分。
 
 ## 后续 PR 
 
-- PR 5：接入真实 AI 对话、纠错和评分能力。
-- PR 6：实现课后总结报告与 Demo 视频录制。
+- PR 6：实现课后总结报告。
+- PR 7：接入 TTS 播放 AI 回复并录制 Demo 视频。
