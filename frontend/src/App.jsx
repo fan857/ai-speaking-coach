@@ -174,6 +174,10 @@ function App() {
     window.speechSynthesis.speak(utterance);
   }
 
+  function handleReplayAiReply(text) {
+    speakAiReply(text);
+  }
+
   async function handleRecordClick() {
     if (isRecording) {
       mediaRecorderRef.current?.stop();
@@ -409,7 +413,12 @@ function App() {
             </div>
 
             <div className="message ai-message">
-              <span>AI</span>
+              <div className="message-header">
+                <span>AI</span>
+                <button className="replay-button" onClick={() => handleReplayAiReply(selectedScenario.prompt)} type="button">
+                  重读
+                </button>
+              </div>
               <p>{selectedScenario.prompt}</p>
             </div>
 
@@ -419,7 +428,18 @@ function App() {
                   className={message.role === "user" ? "message user-message" : "message ai-message"}
                   key={message.id}
                 >
-                  <span>{message.role === "user" ? "You" : "AI"}</span>
+                  <div className="message-header">
+                    <span>{message.role === "user" ? "You" : "AI"}</span>
+                    {message.role === "assistant" && (
+                      <button
+                        className="replay-button"
+                        onClick={() => handleReplayAiReply(message.content)}
+                        type="button"
+                      >
+                        重读
+                      </button>
+                    )}
+                  </div>
                   <p>{message.content}</p>
                 </div>
               ))
@@ -507,7 +527,18 @@ function App() {
             </section>
 
             <section className="feedback-card">
-              <p className="section-label">AI 回复</p>
+              <div className="feedback-title-row">
+                <p className="section-label">AI 回复</p>
+                {practiceResult?.aiReply && (
+                  <button
+                    className="replay-button"
+                    onClick={() => handleReplayAiReply(practiceResult.aiReply)}
+                    type="button"
+                  >
+                    重读
+                  </button>
+                )}
+              </div>
               <p>{practiceResult ? practiceResult.aiReply : "提交文本后，这里会展示 AI 回复。"}</p>
             </section>
 
