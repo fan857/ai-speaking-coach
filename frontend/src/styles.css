@@ -202,6 +202,16 @@ h2 {
   text-align: center;
 }
 
+.end-state {
+  border: 1px solid #ffd59e;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  color: #7a4a00;
+  background: #fff7e8;
+  font-weight: 700;
+}
+
 .input-panel {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -257,6 +267,12 @@ textarea {
 textarea:focus {
   border-color: #2556d9;
   outline: 3px solid rgba(37, 86, 217, 0.14);
+}
+
+textarea:disabled {
+  cursor: not-allowed;
+  color: #788698;
+  background: #f3f6fa;
 }
 
 .submit-button {
@@ -326,6 +342,12 @@ textarea:focus {
   background: #1b7895;
 }
 
+.speech-button:disabled {
+  cursor: not-allowed;
+  color: #788698;
+  background: #edf2f7;
+}
+
 .recording-panel {
   display: grid;
   gap: 10px;
@@ -344,6 +366,35 @@ textarea:focus {
 
 .recording-panel audio {
   width: 100%;
+}
+
+.conversation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.conversation-actions button {
+  border: 1px solid #ccd8e5;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #26364a;
+  background: #ffffff;
+  font-weight: 800;
+}
+
+.conversation-actions button:first-child {
+  color: #7a2f12;
+  border-color: #ffd0b8;
+  background: #fff4ee;
+}
+
+.conversation-actions button:disabled {
+  cursor: not-allowed;
+  color: #8b97a8;
+  border-color: #d9e2ec;
+  background: #f3f6fa;
 }
 
 .feedback-stack {

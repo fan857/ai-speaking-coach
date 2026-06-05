@@ -87,7 +87,7 @@ function ScoreBar({ label, value }) {
 function App() {
   const [selectedScenarioId, setSelectedScenarioId] = useState("interview");
   const [userInput, setUserInput] = useState("");
-  const [submittedText, setSubmittedText] = useState("");
+  const [conversationMessages, setConversationMessages] = useState([]);
   const [practiceResult, setPracticeResult] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -98,6 +98,8 @@ function App() {
   const [isRecognizing, setIsRecognizing] = useState(false);
   const [recognitionStatus, setRecognitionStatus] =
     useState("点击“开始识别”后，说出的英文会自动填入文本框。");
+  const [isConversationEnded, setIsConversationEnded] = useState(false);
+  const [speechStatus, setSpeechStatus] = useState("AI 回复后会自动英文朗读。");
   const mediaRecorderRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -120,6 +122,7 @@ function App() {
       }
 
       recognitionRef.current?.abort();
+      window.speechSynthesis?.cancel();
     };
   }, []);
 
@@ -138,12 +141,37 @@ function App() {
     recordingTimerRef.current = null;
   }
 
+  function resetConversation() {
+    window.speechSynthesis?.cancel();
+    setConversationMessages([]);
+    setPracticeResult(null);
+    setUserInput("");
+    setErrorMessage("");
+    setIsConversationEnded(false);
+    setSpeechStatus("AI 回复后会自动英文朗读。");
+    setRecognitionStatus("点击“开始识别”后，说出的英文会自动填入文本框。");
+  }
+
   function handleScenarioChange(scenarioId) {
     setSelectedScenarioId(scenarioId);
-    setSubmittedText("");
-    setPracticeResult(null);
-    setErrorMessage("");
-    setRecognitionStatus("点击“开始识别”后，说出的英文会自动填入文本框。");
+    resetConversation();
+  }
+
+  function speakAiReply(text) {
+    if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
+      setSpeechStatus("当前浏览器不支持英文朗读，AI 回复仍可正常显示。");
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-US";
+    utterance.rate = 0.92;
+    utterance.pitch = 1;
+    utterance.onstart = () => setSpeechStatus("正在朗读 AI 英文回复。");
+    utterance.onend = () => setSpeechStatus("AI 英文回复朗读完成。");
+    utterance.onerror = () => setSpeechStatus("朗读失败，可以直接阅读页面上的 AI 回复。");
+    window.speechSynthesis.speak(utterance);
   }
 
   async function handleRecordClick() {
@@ -213,6 +241,11 @@ function App() {
       return;
     }
 
+    if (isConversationEnded) {
+      setErrorMessage("当前对话已结束，请先重新开始对话。");
+      return;
+    }
+
     if (isRecognizing) {
       recognitionRef.current?.stop();
       return;
@@ -260,22 +293,44 @@ function App() {
     recognition.start();
   }
 
+  function buildHistoryPayload(messages) {
+    return messages.map((message) => ({
+      role: message.role,
+      content: message.content
+    }));
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     const trimmedInput = userInput.trim();
 
+    if (isConversationEnded) {
+      setErrorMessage("当前对话已结束，请点击“重新开始对话”后继续。");
+      return;
+    }
+
     if (!trimmedInput) {
-      setErrorMessage("请输入一句英文后再提交。");
+      setErrorMessage("请输入或识别一句英文后再提交。");
       return;
     }
 
     setIsSubmitting(true);
     setErrorMessage("");
 
+    const userMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: trimmedInput
+    };
+    const nextMessages = [...conversationMessages, userMessage];
+    setConversationMessages(nextMessages);
+    setUserInput("");
+
     try {
       const response = await requestCoachPractice({
         scenarioId: selectedScenarioId,
-        transcript: trimmedInput
+        transcript: trimmedInput,
+        history: buildHistoryPayload(conversationMessages)
       });
 
       const data = await response.json();
@@ -284,9 +339,16 @@ function App() {
         throw new Error(data.message || "提交失败，请稍后重试。");
       }
 
-      setSubmittedText(data.transcript);
+      const aiMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: data.aiReply
+      };
       setPracticeResult(data);
+      setConversationMessages([...nextMessages, aiMessage]);
+      speakAiReply(data.aiReply);
     } catch (error) {
+      setConversationMessages(conversationMessages);
       setErrorMessage(
         error.message === "Failed to fetch"
           ? "请求后端失败，请确认后端服务已启动：http://localhost:3001"
@@ -295,6 +357,13 @@ function App() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function handleEndConversation() {
+    recognitionRef.current?.stop();
+    window.speechSynthesis?.cancel();
+    setIsConversationEnded(true);
+    setSpeechStatus("对话已结束。本 PR 不生成课后总结，总结将在下一 PR 完成。");
   }
 
   return (
@@ -315,8 +384,7 @@ function App() {
             </p>
             <h2>{selectedScenario.title}</h2>
             <p className="muted">
-              与{selectedScenario.role}进行场景对话练习。当前 PR 支持真实 AI
-              生成回复、纠错和评分，未配置 Key 时自动使用兜底反馈。
+              与{selectedScenario.role}进行多轮英语口语对话。AI 会参考历史上下文继续追问，并在回复后自动英文朗读。
             </p>
           </div>
           <div className="scenario-tabs" role="tablist" aria-label="练习场景">
@@ -345,20 +413,22 @@ function App() {
               <p>{selectedScenario.prompt}</p>
             </div>
 
-            {submittedText ? (
-              <div className="message user-message">
-                <span>You</span>
-                <p>{submittedText}</p>
-              </div>
+            {conversationMessages.length ? (
+              conversationMessages.map((message) => (
+                <div
+                  className={message.role === "user" ? "message user-message" : "message ai-message"}
+                  key={message.id}
+                >
+                  <span>{message.role === "user" ? "You" : "AI"}</span>
+                  <p>{message.content}</p>
+                </div>
+              ))
             ) : (
               <div className="empty-state">在下方输入一句英文，或使用语音识别自动生成文本。</div>
             )}
 
-            {practiceResult && (
-              <div className="message ai-message">
-                <span>AI</span>
-                <p>{practiceResult.aiReply}</p>
-              </div>
+            {isConversationEnded && (
+              <div className="end-state">本轮对话已结束。课后总结将在下一 PR 中生成。</div>
             )}
 
             <form className="input-panel" onSubmit={handleSubmit}>
@@ -372,19 +442,21 @@ function App() {
                 {isRecording ? "停止录音" : "开始录音"}
               </button>
               <textarea
+                disabled={isConversationEnded}
                 onChange={(event) => setUserInput(event.target.value)}
                 placeholder={selectedScenario.placeholder}
                 rows={4}
                 value={userInput}
               />
-              <button className="submit-button" disabled={isSubmitting} type="submit">
-                {isSubmitting ? "提交中..." : "获取 AI 反馈"}
+              <button className="submit-button" disabled={isSubmitting || isConversationEnded} type="submit">
+                {isSubmitting ? "提交中..." : "发送并获取 AI 回复"}
               </button>
             </form>
 
             <div className="speech-panel">
               <button
                 className={isRecognizing ? "speech-button active" : "speech-button"}
+                disabled={isConversationEnded}
                 onClick={handleSpeechRecognitionClick}
                 type="button"
               >
@@ -410,23 +482,33 @@ function App() {
               {audioUrl && <audio controls src={audioUrl} />}
             </div>
 
+            <div className="conversation-actions">
+              <button disabled={isConversationEnded || !conversationMessages.length} onClick={handleEndConversation} type="button">
+                结束对话
+              </button>
+              <button onClick={resetConversation} type="button">
+                重新开始对话
+              </button>
+            </div>
+
             {errorMessage && <p className="error-text">{errorMessage}</p>}
           </div>
 
           <aside className="feedback-stack">
             <section className="feedback-card">
               <p className="section-label">反馈来源</p>
-              <p>
-                {getFeedbackSourceLabel(practiceResult)}
-              </p>
+              <p>{getFeedbackSourceLabel(practiceResult)}</p>
               {practiceResult?.warning && <p className="warning-text">{practiceResult.warning}</p>}
             </section>
 
             <section className="feedback-card">
+              <p className="section-label">AI 英文朗读</p>
+              <p>{speechStatus}</p>
+            </section>
+
+            <section className="feedback-card">
               <p className="section-label">AI 回复</p>
-              <p>
-                {practiceResult ? practiceResult.aiReply : "提交文本后，这里会展示 AI 回复。"}
-              </p>
+              <p>{practiceResult ? practiceResult.aiReply : "提交文本后，这里会展示 AI 回复。"}</p>
             </section>
 
             <section className="feedback-card">
