@@ -22,7 +22,7 @@
 
 - 前端：React + Vite
 - 后端：Python + FastAPI
-- AI：DeepSeek OpenAI-compatible Chat Completions API
+- AI：DeepSeek + LangChain
 - 浏览器能力：MediaRecorder、Web Speech API、SpeechSynthesis
 
 ## 本地运行
@@ -141,13 +141,21 @@ npm run build
 - 前端使用浏览器 `SpeechSynthesis` 自动朗读 AI 英文回复。
 - 新增“结束对话”按钮，结束后不立即生成总结。
 
+### PR 7：后端模块化并使用 LangChain 封装 DeepSeek 调用
+
+- 将原本集中在 `backend/main.py` 的后端代码拆分到 `backend/app/`。
+- `main.py` 只保留启动入口和应用创建。
+- 使用 `langchain-deepseek` 的 `ChatDeepSeek` 封装 DeepSeek 模型调用。
+- 保持原有 API 路径和前端交互不变。
+- 保留 mock 兜底，LangChain 依赖缺失或真实 AI 请求失败时不影响演示。
+
 ## 原创与依赖说明
 
-本项目代码为本次实训营题目创建的原创 MVP 实现，没有复制第三方项目代码。项目使用 React、Vite、FastAPI、httpx、uvicorn 等开源框架和库完成基础工程、页面、接口和 AI 调用。
+本项目代码为本次实训营题目创建的原创 MVP 实现，没有复制第三方项目代码。项目使用 React、Vite、FastAPI、LangChain、DeepSeek、uvicorn 等开源框架和库完成基础工程、页面、接口和 AI 调用。
 
 浏览器录音、语音识别和朗读依赖浏览器原生能力；Web Speech API 在不同浏览器支持程度不同，建议使用最新版 Chrome 或 Edge 演示。
 
 ## 后续 PR
 
-- PR 7：生成课后总结报告。
-- PR 8：优化发音评分说明和 Demo 录制材料。
+- PR 8：生成课后总结报告。
+- PR 9：优化发音评分说明和 Demo 录制材料。

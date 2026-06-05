@@ -1,0 +1,14 @@
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+
+class ConversationMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class PracticeRequest(BaseModel):
+    scenarioId: str
+    transcript: str
+    history: list[ConversationMessage] = Field(default_factory=list)
