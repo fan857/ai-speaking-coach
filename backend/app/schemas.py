@@ -11,4 +11,5 @@ class ConversationMessage(BaseModel):
 class PracticeRequest(BaseModel):
     scenarioId: str
     transcript: str
+    mode: Literal["feedback", "immersive"] = "feedback"
     history: list[ConversationMessage] = Field(default_factory=list)

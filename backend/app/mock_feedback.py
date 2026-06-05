@@ -110,5 +110,42 @@ SCENARIO_HANDLERS = {
 }
 
 
+def get_mock_immersive_result(scenario_id: str, transcript: str, history: list[ConversationMessage]) -> dict[str, Any]:
+    turn_count = get_history_turn_count(history)
+    lower_text = transcript.lower()
+
+    if scenario_id == "restaurant":
+        ai_reply = (
+            "Great. Would you like anything else with your order?"
+            if turn_count >= 1
+            else "Sure. Would you like that hot or iced?"
+        )
+    elif scenario_id == "meeting":
+        ai_reply = (
+            "Thanks for sharing that. What is the next step for your work?"
+            if turn_count >= 1
+            else "Thanks for the update. Is there anything blocking your progress?"
+        )
+    elif "secret" in lower_text or "confidential" in lower_text:
+        ai_reply = "No problem. Could you share what you can discuss at a high level?"
+    else:
+        ai_reply = (
+            "That sounds interesting. What was the most difficult part for you?"
+            if turn_count >= 1
+            else "Nice start. Could you tell me more about your role in that project?"
+        )
+
+    return {
+        "aiReply": ai_reply,
+        "correction": {
+            "original": transcript,
+            "improved": transcript,
+            "reason": "沉浸对话模式下不进行即时纠错，结束对话后再统一点评。",
+        },
+        "scores": build_scores(0, 0, 0, 0),
+        "tips": ["沉浸对话模式下先保持对话流畅，结束后再统一总结。"],
+    }
+
+
 def get_mock_practice_result(scenario_id: str, transcript: str, history: list[ConversationMessage]) -> dict[str, Any]:
     return SCENARIO_HANDLERS[scenario_id](transcript, history)

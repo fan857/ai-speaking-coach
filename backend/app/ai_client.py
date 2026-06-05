@@ -8,12 +8,35 @@ from app.text_utils import clamp_score, normalize_sentence
 
 
 SYSTEM_PROMPT = (
-    "你是严谨、鼓励型的英语口语陪练。"
-    "你必须输出结构化 JSON，并且所有纠错都针对用户最新一句英文。"
+    "You are a strict but encouraging English speaking coach. "
+    "You must always return valid JSON."
 )
 
 
-def normalize_coach_result(result: dict[str, Any], transcript: str) -> dict[str, Any]:
+def build_empty_feedback(transcript: str) -> dict[str, Any]:
+    return {
+        "correction": {
+            "original": transcript,
+            "improved": transcript,
+            "reason": "沉浸对话模式下不进行即时纠错，结束对话后再统一点评。",
+        },
+        "scores": {
+            "fluency": 0,
+            "pronunciation": 0,
+            "grammar": 0,
+            "naturalness": 0,
+        },
+        "tips": ["沉浸对话模式下先保持对话流畅，结束后再生成全程总结。"],
+    }
+
+
+def normalize_coach_result(result: dict[str, Any], transcript: str, mode: str) -> dict[str, Any]:
+    if mode == "immersive":
+        return {
+            "aiReply": str(result.get("aiReply") or "Could you tell me a little more?"),
+            **build_empty_feedback(transcript),
+        }
+
     correction = result.get("correction") if isinstance(result.get("correction"), dict) else {}
     scores = result.get("scores") if isinstance(result.get("scores"), dict) else {}
     tips = result.get("tips") if isinstance(result.get("tips"), list) else []
@@ -50,12 +73,12 @@ async def request_ai_coach_result(
     scenario_id: str,
     transcript: str,
     history: list[ConversationMessage],
+    mode: str,
 ) -> dict[str, Any] | None:
     config = get_ai_provider_config()
     if not config:
         return None
 
-    # 延迟导入，避免未安装 LangChain 时后端启动失败；接口会自动走 mock 兜底。
     try:
         from langchain_core.messages import HumanMessage, SystemMessage
         from langchain_deepseek import ChatDeepSeek
@@ -70,7 +93,7 @@ async def request_ai_coach_result(
     response = await model.ainvoke(
         [
             SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=get_coach_prompt(scenario_id, transcript, history)),
+            HumanMessage(content=get_coach_prompt(scenario_id, transcript, history, mode)),
         ]
     )
 
@@ -80,7 +103,7 @@ async def request_ai_coach_result(
 
     parsed_content = parse_json_content(content)
     return {
-        **normalize_coach_result(parsed_content, transcript),
+        **normalize_coach_result(parsed_content, transcript, mode),
         "provider": config["provider"],
         "model": config["model"],
     }
