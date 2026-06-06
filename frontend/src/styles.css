@@ -67,6 +67,14 @@ h1 {
   line-height: 1.04;
 }
 
+.product-slogan {
+  max-width: 720px;
+  margin: 10px 0 0;
+  color: #536173;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
 h2 {
   margin-bottom: 6px;
   font-size: 1.2rem;
@@ -97,6 +105,66 @@ h2 {
   text-transform: uppercase;
 }
 
+.product-overview {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.training-status-card,
+.requirement-tags {
+  border: 1px solid #d6e0ea;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 10px 28px rgba(31, 47, 70, 0.06);
+}
+
+.training-status-card {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.training-status-card div {
+  padding: 13px 16px;
+  border-right: 1px solid #e3ebf3;
+}
+
+.training-status-card div:last-child {
+  border-right: 0;
+}
+
+.training-status-card span,
+.report-kpis span {
+  display: block;
+  margin-bottom: 5px;
+  color: #607086;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.training-status-card strong,
+.report-kpis strong {
+  color: #172033;
+  font-size: 1rem;
+}
+
+.requirement-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.requirement-tags span {
+  border: 1px solid #c6ddf4;
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #23466b;
+  background: #f3f8ff;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
 .scenario-panel,
 .mode-panel,
 .conversation-panel,
@@ -120,6 +188,23 @@ h2 {
 .mode-panel p:last-child {
   margin-bottom: 0;
   color: #607086;
+}
+
+.mode-explainer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mode-explainer span {
+  border: 1px solid #d8e4ef;
+  border-radius: 8px;
+  padding: 7px 9px;
+  color: #4d5f74;
+  background: #f8fbfe;
+  font-size: 0.86rem;
+  line-height: 1.4;
 }
 
 .scenario-tabs,
@@ -453,6 +538,34 @@ textarea:disabled {
   width: 100%;
 }
 
+.pipeline-card {
+  margin-top: 12px;
+  border: 1px solid #d7e0ea;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8fbfe;
+}
+
+.pipeline-card p {
+  margin-bottom: 8px;
+}
+
+.pipeline-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pipeline-steps span {
+  border: 1px solid #dce6ef;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #45576b;
+  background: #ffffff;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
 .conversation-actions {
   display: flex;
   flex-wrap: wrap;
@@ -482,6 +595,38 @@ textarea:disabled {
 .feedback-stack {
   display: grid;
   gap: 12px;
+}
+
+.feedback-center-header {
+  border: 1px solid #d6e0ea;
+  border-radius: 8px;
+  padding: 16px;
+  background: #ffffff;
+  box-shadow: 0 14px 34px rgba(31, 47, 70, 0.07);
+}
+
+.feedback-center-header h2 {
+  margin-bottom: 0;
+  font-size: 1.05rem;
+}
+
+.feedback-section-heading {
+  display: grid;
+  gap: 3px;
+  border-left: 4px solid #167f92;
+  padding: 4px 0 4px 10px;
+}
+
+.feedback-section-heading span {
+  color: #172033;
+  font-weight: 900;
+}
+
+.feedback-section-heading p {
+  margin-bottom: 0;
+  color: #607086;
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .feedback-card {
@@ -539,6 +684,20 @@ textarea:disabled {
 .summary-card {
   border-color: #bfe1d3;
   background: #fbfffd;
+}
+
+.report-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.report-kpis div {
+  border: 1px solid #d4eadf;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #ffffff;
 }
 
 .summary-grid,
@@ -744,6 +903,11 @@ textarea:disabled {
   .conversation-grid {
     grid-template-columns: 1fr;
   }
+
+  .training-status-card,
+  .pipeline-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 560px) {
@@ -761,8 +925,20 @@ textarea:disabled {
   .scenario-tabs,
   .mode-tabs,
   .input-panel,
-  .realtime-panel {
+  .realtime-panel,
+  .training-status-card,
+  .pipeline-steps,
+  .report-kpis {
     grid-template-columns: 1fr;
+  }
+
+  .training-status-card div {
+    border-right: 0;
+    border-bottom: 1px solid #e3ebf3;
+  }
+
+  .training-status-card div:last-child {
+    border-bottom: 0;
   }
 
   .scenario-tabs,
