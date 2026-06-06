@@ -149,3 +149,38 @@ def get_mock_immersive_result(scenario_id: str, transcript: str, history: list[C
 
 def get_mock_practice_result(scenario_id: str, transcript: str, history: list[ConversationMessage]) -> dict[str, Any]:
     return SCENARIO_HANDLERS[scenario_id](transcript, history)
+
+
+def get_mock_summary_result(scenario_id: str, history: list[ConversationMessage]) -> dict[str, Any]:
+    user_turns = [message.content for message in history if message.role == "user"]
+    turn_count = len(user_turns)
+    latest_user_text = user_turns[-1] if user_turns else ""
+
+    if scenario_id == "restaurant":
+        summary = "本次点餐对话能完成基本需求表达，后续可以继续练习规格、数量和礼貌补充。"
+        next_steps = ["练习用 would like 表达点餐需求。", "补充 size、temperature、quantity 等细节。"]
+    elif scenario_id == "meeting":
+        summary = "本次会议对话能给出工作进展，下一步需要把 blocker 和 next step 说得更清楚。"
+        next_steps = ["用 progress, blocker, next step 三段式复述。", "准备一句清楚的团队协作请求。"]
+    else:
+        summary = "本次面试对话已经能围绕项目展开，建议继续补充个人贡献和可量化结果。"
+        next_steps = ["准备 1 个可量化项目结果。", "用 STAR 结构组织 30 秒英文回答。"]
+
+    base_score = 72 + min(turn_count, 4) * 4
+    if latest_user_text and len(latest_user_text.split()) >= 8:
+        base_score += 4
+
+    return {
+        "summary": summary,
+        "highlights": ["能够跟随 AI 追问继续表达。", "对话主题保持一致，没有明显跑题。"],
+        "weaknesses": ["回答还可以加入更多具体细节。", "部分句子建议使用更完整、更自然的英文结构。"],
+        "nextSteps": next_steps,
+        "scores": build_scores(base_score, base_score - 2, base_score - 4, base_score - 1),
+        "scoreReasons": {
+            "fluency": f"本轮共有 {turn_count} 次用户发言，能持续跟随话题，因此按对话连贯度给出估算分。",
+            "pronunciation": "当前 mock 无音频特征，只能按 ASR 转写是否形成完整英文句子保守估算。",
+            "grammar": "根据用户转写文本的句子完整度和常见语法问题估算。",
+            "naturalness": "根据回答是否贴合场景、是否自然承接 AI 追问估算。",
+        },
+        "scoreBasis": "本 MVP 的课后评分基于对话转写、ASR 可识别程度和语言质量；暂不包含音素级发音评测。",
+    }

@@ -41,8 +41,8 @@ const practiceModes = [
 ];
 
 const scoreLabels = {
-  fluency: "流利度",
-  pronunciation: "发音清晰度",
+  fluency: "表达流畅度",
+  pronunciation: "识别清晰度",
   grammar: "语法",
   naturalness: "表达自然度"
 };
@@ -128,6 +128,22 @@ async function requestCoachPractice(payload) {
   }
 }
 
+async function requestPracticeSummary(payload) {
+  const requestOptions = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  };
+
+  try {
+    return await fetch("/api/practice/summary", requestOptions);
+  } catch {
+    return fetch("http://localhost:3001/api/practice/summary", requestOptions);
+  }
+}
+
 async function requestStreamFallback(payload) {
   const requestOptions = {
     method: "POST",
@@ -198,7 +214,7 @@ function getFeedbackSourceLabel(result) {
   return "本地兜底反馈";
 }
 
-function ScoreBar({ label, value }) {
+function ScoreBar({ label, reason, value }) {
   return (
     <div className="score-row">
       <div className="score-meta">
@@ -208,6 +224,7 @@ function ScoreBar({ label, value }) {
       <div className="score-track" aria-label={`${label}评分 ${value}`}>
         <div className="score-fill" style={{ width: `${value}%` }} />
       </div>
+      {reason && <p className="score-reason">{reason}</p>}
     </div>
   );
 }
@@ -218,6 +235,8 @@ function App() {
   const [userInput, setUserInput] = useState("");
   const [conversationMessages, setConversationMessages] = useState([]);
   const [practiceResult, setPracticeResult] = useState(null);
+  const [summaryResult, setSummaryResult] = useState(null);
+  const [isSummarizing, setIsSummarizing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [isRecording, setIsRecording] = useState(false);
@@ -254,6 +273,8 @@ function App() {
   const realtimeStreamRef = useRef(null);
   const realtimePlaybackTimeRef = useRef(0);
   const qwenAsrTranscriptRef = useRef("");
+  const realtimeUserTranscriptRef = useRef("");
+  const realtimeAssistantReplyRef = useRef("");
 
   const selectedScenario = useMemo(
     () => scenarios.find((scenario) => scenario.id === selectedScenarioId),
@@ -264,6 +285,10 @@ function App() {
     [practiceMode]
   );
   const isImmersiveMode = practiceMode === "immersive";
+  const displayAiReply = useMemo(() => {
+    const latestAssistantMessage = [...conversationMessages].reverse().find((message) => message.role === "assistant");
+    return practiceResult?.aiReply || realtimeReply || latestAssistantMessage?.content || "";
+  }, [conversationMessages, practiceResult, realtimeReply]);
 
   useEffect(() => {
     return () => {
@@ -316,6 +341,8 @@ function App() {
     window.speechSynthesis?.cancel();
     setConversationMessages([]);
     setPracticeResult(null);
+    setSummaryResult(null);
+    setIsSummarizing(false);
     setUserInput("");
     setErrorMessage("");
     setIsConversationEnded(false);
@@ -324,6 +351,8 @@ function App() {
     setFirstSentenceLatency(null);
     setRealtimeTranscript("");
     setRealtimeReply("");
+    realtimeUserTranscriptRef.current = "";
+    realtimeAssistantReplyRef.current = "";
     setRealtimeStatus("Qwen 实时语音模型未连接。");
     setStreamStatus("低延迟模式会按句播放 AI 回复。");
     speechQueueRef.current = [];
@@ -856,6 +885,7 @@ function App() {
     }
 
     if (event.type === "input_audio_buffer.speech_started") {
+      realtimeUserTranscriptRef.current = "";
       setRealtimeStatus("检测到你正在说话...");
       return;
     }
@@ -866,12 +896,22 @@ function App() {
     }
 
     if (event.type?.includes("input_audio_transcription") && event.delta) {
+      realtimeUserTranscriptRef.current += event.delta;
       setRealtimeTranscript((text) => `${text}${event.delta}`);
       return;
     }
 
     if (event.type?.includes("input_audio_transcription") && event.transcript) {
+      realtimeUserTranscriptRef.current = event.transcript;
       setRealtimeTranscript(event.transcript);
+      if (event.type.endsWith(".completed") && event.transcript.trim()) {
+        const userMessage = {
+          id: crypto.randomUUID(),
+          role: "user",
+          content: event.transcript.trim()
+        };
+        setConversationMessages((messages) => [...messages, userMessage]);
+      }
       return;
     }
 
@@ -882,11 +922,22 @@ function App() {
     }
 
     if ((event.type === "response.audio_transcript.delta" || event.type === "response.text.delta") && event.delta) {
+      realtimeAssistantReplyRef.current += event.delta;
       setRealtimeReply((text) => `${text}${event.delta}`);
       return;
     }
 
     if (event.type === "response.done") {
+      const reply = realtimeAssistantReplyRef.current.trim();
+      if (reply) {
+        const assistantMessage = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: reply
+        };
+        setConversationMessages((messages) => [...messages, assistantMessage]);
+        realtimeAssistantReplyRef.current = "";
+      }
       setRealtimeStatus("本轮实时回复完成，可以继续说下一句。");
     }
   }
@@ -1049,6 +1100,8 @@ function App() {
       realtimeSourceRef.current = source;
       realtimeProcessorRef.current = processor;
       realtimePlaybackTimeRef.current = audioContext.currentTime;
+      realtimeUserTranscriptRef.current = "";
+      realtimeAssistantReplyRef.current = "";
 
       setRealtimeTranscript("");
       setRealtimeReply("");
@@ -1103,17 +1156,37 @@ function App() {
     }
   }
 
-  function handleEndConversation() {
+  async function handleEndConversation() {
     recognitionRef.current?.stop();
     window.speechSynthesis?.cancel();
+    stopRealtimeConversation();
     setIsConversationEnded(true);
-    setSpeechStatus(
-      isImmersiveMode
-        ? "沉浸对话已结束。本 PR 暂不生成总结，下一 PR 会基于全程对话生成点评。"
-        : "对话已结束。本 PR 不生成课后总结，总结将在下一 PR 完成。"
-    );
-  }
+    setIsSummarizing(true);
+    setSummaryResult(null);
+    setSpeechStatus("对话已结束，正在生成课后总结。");
+    setErrorMessage("");
 
+    try {
+      const response = await requestPracticeSummary({
+        scenarioId: selectedScenarioId,
+        mode: practiceMode,
+        history: buildHistoryPayload(conversationMessages)
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || data.message || "生成课后总结失败，请稍后重试。");
+      }
+
+      setSummaryResult(data);
+      setSpeechStatus("课后总结已生成。");
+    } catch (error) {
+      setErrorMessage(error.message || "生成课后总结失败，请确认后端服务已启动。");
+      setSpeechStatus("课后总结生成失败，可以重新开始对话后再试。");
+    } finally {
+      setIsSummarizing(false);
+    }
+  }
   return (
     <main className="app-shell">
       <section className="workspace">
@@ -1216,33 +1289,37 @@ function App() {
 
             {isConversationEnded && (
               <div className="end-state">
-                {isImmersiveMode
-                  ? "沉浸对话已结束。下一 PR 会生成全程点评和加强训练重点。"
-                  : "本轮对话已结束。课后总结将在下一 PR 中生成。"}
+                {summaryResult ? "对话已结束，课后总结已生成。" : "对话已结束，正在准备课后总结。"}
               </div>
             )}
 
-            <form className="input-panel" onSubmit={handleSubmit}>
-              <button
-                className={isQwenAsrActive ? "record-button recording" : "record-button"}
-                onClick={handleQwenSentencePracticeClick}
-                type="button"
-                aria-label={isQwenAsrActive ? "停止单句识别" : "录一句并识别"}
-              >
-                <span className="record-dot" />
-                {isQwenAsrActive ? "停止识别" : "录一句并识别"}
-              </button>
-              <textarea
-                disabled={isConversationEnded}
-                onChange={(event) => setUserInput(event.target.value)}
-                placeholder={selectedScenario.placeholder}
-                rows={4}
-                value={userInput}
-              />
-              <button className="submit-button" disabled={isSubmitting || isConversationEnded} type="submit">
-                {isSubmitting ? "分析中..." : "获取完整纠错评分"}
-              </button>
-            </form>
+            {!isImmersiveMode ? (
+              <form className="input-panel" onSubmit={handleSubmit}>
+                <button
+                  className={isQwenAsrActive ? "record-button recording" : "record-button"}
+                  onClick={handleQwenSentencePracticeClick}
+                  type="button"
+                  aria-label={isQwenAsrActive ? "停止单句识别" : "录一句并识别"}
+                >
+                  <span className="record-dot" />
+                  {isQwenAsrActive ? "停止识别" : "录一句并识别"}
+                </button>
+                <textarea
+                  disabled={isConversationEnded}
+                  onChange={(event) => setUserInput(event.target.value)}
+                  placeholder={selectedScenario.placeholder}
+                  rows={4}
+                  value={userInput}
+                />
+                <button className="submit-button" disabled={isSubmitting || isConversationEnded} type="submit">
+                  {isSubmitting ? "分析中..." : "获取完整纠错评分"}
+                </button>
+              </form>
+            ) : (
+              <div className="mode-guide">
+                沉浸式对话中不做逐句纠错；点击下方 Qwen 实时语音对话开始练习，结束后统一生成总结。
+              </div>
+            )}
 
             <div className="realtime-panel">
               <button
@@ -1267,16 +1344,22 @@ function App() {
               </div>
             </div>
 
-            <div className="recording-panel">
-              <div>
-                <p className="section-label">单句识别状态</p>
-                <p>{recognitionStatus}</p>
+            {!isImmersiveMode && (
+              <div className="recording-panel">
+                <div>
+                  <p className="section-label">单句识别状态</p>
+                  <p>{recognitionStatus}</p>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="conversation-actions">
-              <button disabled={isConversationEnded || !conversationMessages.length} onClick={handleEndConversation} type="button">
-                结束对话
+              <button
+                disabled={isConversationEnded || isSummarizing || !conversationMessages.length}
+                onClick={handleEndConversation}
+                type="button"
+              >
+                {isSummarizing ? "生成总结中..." : "结束并总结"}
               </button>
               <button onClick={resetConversation} type="button">
                 重新开始对话
@@ -1304,26 +1387,80 @@ function App() {
               <p>{speechStatus}</p>
             </section>
 
+            <section className="feedback-card summary-card">
+              <div className="feedback-title-row">
+                <p className="section-label">课后总结</p>
+                {summaryResult?.source && <span className="source-tag">{summaryResult.source}</span>}
+              </div>
+              {isSummarizing ? (
+                <p>正在根据全程对话生成总结...</p>
+              ) : summaryResult ? (
+                <>
+                  <p>{summaryResult.summary}</p>
+                  {summaryResult.warning && <p className="warning-text">{summaryResult.warning}</p>}
+                  <div className="summary-grid">
+                    <div>
+                      <span>亮点</span>
+                      <ul>
+                        {summaryResult.highlights.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <span>待加强</span>
+                      <ul>
+                        {summaryResult.weaknesses.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <span>下一步</span>
+                      <ul>
+                        {summaryResult.nextSteps.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                  <div className="score-list compact-score-list">
+                    {Object.entries(summaryResult.scores).map(([key, value]) => (
+                      <ScoreBar
+                        key={key}
+                        label={scoreLabels[key]}
+                        reason={summaryResult.scoreReasons?.[key]}
+                        value={value}
+                      />
+                    ))}
+                  </div>
+                  {summaryResult.scoreBasis && <p className="score-basis">{summaryResult.scoreBasis}</p>}
+                </>
+              ) : (
+                <p>结束对话后，这里会生成全程表现总结、评分依据、薄弱点和下一步训练建议。</p>
+              )}
+            </section>
+
             <section className="feedback-card">
               <div className="feedback-title-row">
                 <p className="section-label">AI 回复</p>
-                {practiceResult?.aiReply && (
+                {displayAiReply && (
                   <button
                     className="replay-button"
-                    onClick={() => handleReplayAiReply(practiceResult.aiReply)}
+                    onClick={() => handleReplayAiReply(displayAiReply)}
                     type="button"
                   >
                     重读
                   </button>
                 )}
               </div>
-              <p>{practiceResult ? practiceResult.aiReply : "实时语音回复显示在左侧 Qwen 面板；这里用于展示完整纠错评分接口返回的 AI 回复。"}</p>
+              <p>{displayAiReply || "开始对话后，这里会同步展示最近一条 AI 回复。"}</p>
             </section>
 
             {isImmersiveMode ? (
               <section className="feedback-card">
                 <p className="section-label">沉浸对话说明</p>
-                <p>当前模式不进行即时纠错和评分，先保证英语对话流畅。点击“结束对话”后，下一 PR 会生成全程点评和训练重点。</p>
+                <p>当前模式不进行即时纠错和评分，先保证英语对话流畅。点击“结束并总结”后，会基于全程对话生成课后总结、薄弱点和训练重点。</p>
               </section>
             ) : (
               <>
@@ -1367,11 +1504,16 @@ function App() {
                   {practiceResult ? (
                     <div className="score-list">
                       {Object.entries(practiceResult.scores).map(([key, value]) => (
-                        <ScoreBar key={key} label={scoreLabels[key]} value={value} />
+                        <ScoreBar
+                          key={key}
+                          label={scoreLabels[key]}
+                          reason={practiceResult.scoreReasons?.[key]}
+                          value={value}
+                        />
                       ))}
                     </div>
                   ) : (
-                    <p>流利度、发音清晰度、语法、表达自然度评分会展示在这里。</p>
+                    <p>表达流畅度、识别清晰度、语法、表达自然度评分会展示在这里。</p>
                   )}
                 </section>
               </>

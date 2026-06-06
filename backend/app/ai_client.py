@@ -2,7 +2,7 @@ import json
 from typing import Any
 
 from app.config import get_ai_provider_config
-from app.prompts import get_coach_prompt
+from app.prompts import get_coach_prompt, get_summary_prompt
 from app.schemas import ConversationMessage
 from app.text_utils import clamp_score, normalize_sentence
 
@@ -60,6 +60,41 @@ def normalize_coach_result(result: dict[str, Any], transcript: str, mode: str) -
     }
 
 
+def normalize_summary_result(result: dict[str, Any]) -> dict[str, Any]:
+    scores = result.get("scores") if isinstance(result.get("scores"), dict) else {}
+    score_reasons = result.get("scoreReasons") if isinstance(result.get("scoreReasons"), dict) else {}
+
+    def normalize_list(key: str, fallback: list[str]) -> list[str]:
+        values = result.get(key)
+        if not isinstance(values, list):
+            return fallback
+        normalized = [str(item) for item in values if str(item).strip()]
+        return normalized[:3] or fallback
+
+    return {
+        "summary": str(result.get("summary") or "本次对话已完成，建议继续补充更具体的信息并保持英文表达连贯。"),
+        "highlights": normalize_list("highlights", ["能够完成基本英文对话。", "能根据 AI 追问继续表达。"]),
+        "weaknesses": normalize_list("weaknesses", ["部分回答可以更具体。", "注意使用完整句和更自然的连接词。"]),
+        "nextSteps": normalize_list("nextSteps", ["用 3 句话复述本轮主题。", "准备 2 个可量化细节用于下一轮练习。"]),
+        "scores": {
+            "fluency": clamp_score(scores.get("fluency")),
+            "pronunciation": clamp_score(scores.get("pronunciation")),
+            "grammar": clamp_score(scores.get("grammar")),
+            "naturalness": clamp_score(scores.get("naturalness")),
+        },
+        "scoreReasons": {
+            "fluency": str(score_reasons.get("fluency") or "根据回答长度、轮次衔接和表达连贯度估算。"),
+            "pronunciation": str(score_reasons.get("pronunciation") or "根据 Qwen ASR 是否能稳定转写你的英文内容估算，不代表音素级发音评分。"),
+            "grammar": str(score_reasons.get("grammar") or "根据对话转写文本中的时态、句子结构和常见语法问题估算。"),
+            "naturalness": str(score_reasons.get("naturalness") or "根据表达是否像真实口语、是否自然承接上下文估算。"),
+        },
+        "scoreBasis": str(
+            result.get("scoreBasis")
+            or "本 MVP 使用对话转写、ASR 可识别程度和语言质量生成评分；暂不包含音素级发音评测。"
+        ),
+    }
+
+
 def parse_json_content(content: str) -> dict[str, Any]:
     cleaned_content = content.strip()
     if cleaned_content.startswith("```"):
@@ -69,12 +104,7 @@ def parse_json_content(content: str) -> dict[str, Any]:
     return json.loads(cleaned_content)
 
 
-async def request_ai_coach_result(
-    scenario_id: str,
-    transcript: str,
-    history: list[ConversationMessage],
-    mode: str,
-) -> dict[str, Any] | None:
+async def invoke_deepseek_json(prompt: str, temperature: float) -> dict[str, Any] | None:
     config = get_ai_provider_config()
     if not config:
         return None
@@ -88,12 +118,12 @@ async def request_ai_coach_result(
     model = ChatDeepSeek(
         model=config["model"],
         api_key=config["api_key"],
-        temperature=0.4,
+        temperature=temperature,
     ).bind(response_format={"type": "json_object"})
     response = await model.ainvoke(
         [
             SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=get_coach_prompt(scenario_id, transcript, history, mode)),
+            HumanMessage(content=prompt),
         ]
     )
 
@@ -103,7 +133,40 @@ async def request_ai_coach_result(
 
     parsed_content = parse_json_content(content)
     return {
-        **normalize_coach_result(parsed_content, transcript, mode),
+        **parsed_content,
         "provider": config["provider"],
         "model": config["model"],
+    }
+
+
+async def request_ai_coach_result(
+    scenario_id: str,
+    transcript: str,
+    history: list[ConversationMessage],
+    mode: str,
+) -> dict[str, Any] | None:
+    result = await invoke_deepseek_json(get_coach_prompt(scenario_id, transcript, history, mode), 0.4)
+    if not result:
+        return None
+
+    return {
+        **normalize_coach_result(result, transcript, mode),
+        "provider": result["provider"],
+        "model": result["model"],
+    }
+
+
+async def request_ai_summary_result(
+    scenario_id: str,
+    history: list[ConversationMessage],
+    mode: str,
+) -> dict[str, Any] | None:
+    result = await invoke_deepseek_json(get_summary_prompt(scenario_id, history, mode), 0.25)
+    if not result:
+        return None
+
+    return {
+        **normalize_summary_result(result),
+        "provider": result["provider"],
+        "model": result["model"],
     }
