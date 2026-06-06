@@ -272,7 +272,7 @@ h2 {
 }
 
 .record-button,
-.submit-button,
+.feedback-submit-button,
 .realtime-button,
 .conversation-actions button {
   min-height: 44px;
@@ -333,14 +333,15 @@ textarea:disabled {
   background: #f3f6fa;
 }
 
-.submit-button {
-  grid-column: 1 / -1;
+.feedback-submit-button {
+  width: 100%;
+  margin-top: 10px;
   border: 0;
   color: #ffffff;
-  background: #2d5bd7;
+  background: #167f92;
 }
 
-.submit-button:disabled,
+.feedback-submit-button:disabled,
 .realtime-button:disabled,
 .conversation-actions button:disabled {
   cursor: not-allowed;

@@ -214,6 +214,34 @@ function getFeedbackSourceLabel(result) {
   return "本地兜底反馈";
 }
 
+function getReplySourceLabel(source) {
+  if (!source) {
+    return "等待回复来源";
+  }
+
+  if (source === "deepseek") {
+    return "DeepSeek 真实快速回复";
+  }
+
+  if (source === "qwen-realtime") {
+    return "Qwen Realtime 语音模型回复";
+  }
+
+  if (source === "mock" || source === "fast-local") {
+    return "本地 mock 兜底快速回复";
+  }
+
+  if (source === "local-instant" || source === "browser-instant") {
+    return "浏览器本地承接句";
+  }
+
+  return source;
+}
+
+function isFallbackReplySource(source) {
+  return ["mock", "fast-local", "local-instant", "browser-instant"].includes(source);
+}
+
 function ScoreBar({ label, reason, value }) {
   return (
     <div className="score-row">
@@ -238,6 +266,7 @@ function App() {
   const [summaryResult, setSummaryResult] = useState(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedbackCandidate, setFeedbackCandidate] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -245,12 +274,13 @@ function App() {
   const [audioBlobSize, setAudioBlobSize] = useState(0);
   const [isRecognizing, setIsRecognizing] = useState(false);
   const [recognitionStatus, setRecognitionStatus] =
-    useState("点击“录一句并识别”后，Qwen ASR 会转写英文并自动生成纠错评分。");
+    useState("点击“录一句并对话”后，Qwen Realtime 会识别并先回复；需要评分时再点击纠错评分按钮。");
   const [isConversationEnded, setIsConversationEnded] = useState(false);
   const [speechStatus, setSpeechStatus] = useState("AI 回复后会自动英文朗读。");
   const [isStreamingReply, setIsStreamingReply] = useState(false);
   const [streamStatus, setStreamStatus] = useState("低延迟模式会按句播放 AI 回复。");
   const [streamedReply, setStreamedReply] = useState("");
+  const [quickReplySource, setQuickReplySource] = useState("");
   const [firstSentenceLatency, setFirstSentenceLatency] = useState(null);
   const [isRealtimeActive, setIsRealtimeActive] = useState(false);
   const [isQwenAsrActive, setIsQwenAsrActive] = useState(false);
@@ -273,6 +303,7 @@ function App() {
   const realtimeStreamRef = useRef(null);
   const realtimePlaybackTimeRef = useRef(0);
   const qwenAsrTranscriptRef = useRef("");
+  const qwenSentenceReplyRef = useRef("");
   const realtimeUserTranscriptRef = useRef("");
   const realtimeAssistantReplyRef = useRef("");
 
@@ -287,7 +318,7 @@ function App() {
   const isImmersiveMode = practiceMode === "immersive";
   const displayAiReply = useMemo(() => {
     const latestAssistantMessage = [...conversationMessages].reverse().find((message) => message.role === "assistant");
-    return practiceResult?.aiReply || realtimeReply || latestAssistantMessage?.content || "";
+    return latestAssistantMessage?.content || realtimeReply || practiceResult?.aiReply || "";
   }, [conversationMessages, practiceResult, realtimeReply]);
 
   useEffect(() => {
@@ -337,10 +368,47 @@ function App() {
     setIsQwenAsrActive(false);
   }
 
+  function stopRealtimeInputOnly() {
+    realtimeProcessorRef.current?.disconnect();
+    realtimeSourceRef.current?.disconnect();
+    realtimeStreamRef.current?.getTracks().forEach((track) => track.stop());
+    realtimeSocketRef.current?.close();
+    realtimeProcessorRef.current = null;
+    realtimeSourceRef.current = null;
+    realtimeStreamRef.current = null;
+    realtimeSocketRef.current = null;
+    setIsRealtimeActive(false);
+    setIsQwenAsrActive(false);
+  }
+
+  function closeRealtimeAudioAfterPlayback() {
+    const audioContext = realtimeAudioContextRef.current;
+    if (!audioContext) {
+      return;
+    }
+
+    const remainingMs = Math.max(0, realtimePlaybackTimeRef.current - audioContext.currentTime) * 1000;
+    window.setTimeout(() => {
+      if (realtimeAudioContextRef.current !== audioContext) {
+        if (audioContext.state !== "closed") {
+          audioContext.close();
+        }
+        return;
+      }
+
+      if (audioContext.state !== "closed") {
+        audioContext.close();
+      }
+      realtimeAudioContextRef.current = null;
+      realtimePlaybackTimeRef.current = 0;
+    }, remainingMs + 350);
+  }
+
   function resetConversation() {
     window.speechSynthesis?.cancel();
     setConversationMessages([]);
     setPracticeResult(null);
+    setFeedbackCandidate(null);
     setSummaryResult(null);
     setIsSummarizing(false);
     setUserInput("");
@@ -348,6 +416,7 @@ function App() {
     setIsConversationEnded(false);
     setIsStreamingReply(false);
     setStreamedReply("");
+    setQuickReplySource("");
     setFirstSentenceLatency(null);
     setRealtimeTranscript("");
     setRealtimeReply("");
@@ -360,7 +429,7 @@ function App() {
     streamSocketRef.current?.close();
     stopRealtimeConversation();
     setSpeechStatus("AI 回复后会自动英文朗读。");
-    setRecognitionStatus("点击“录一句并识别”后，Qwen ASR 会转写英文并自动生成纠错评分。");
+    setRecognitionStatus("点击“录一句并对话”后，Qwen Realtime 会识别并先回复；需要评分时再点击纠错评分按钮。");
   }
 
   function handleScenarioChange(scenarioId) {
@@ -605,8 +674,11 @@ function App() {
       return;
     }
 
-    setIsSubmitting(true);
     setErrorMessage("");
+    setStreamedReply("");
+    setQuickReplySource("");
+    setPracticeResult(null);
+    setStreamStatus("正在生成快速 AI 回复；需要纠错评分时，请稍后点击下方按钮。");
 
     const userMessage = {
       id: crypto.randomUUID(),
@@ -614,33 +686,132 @@ function App() {
       content: trimmedInput
     };
     const nextMessages = [...conversationMessages, userMessage];
+    const historyPayload = buildHistoryPayload(conversationMessages);
     setConversationMessages(nextMessages);
+    setFeedbackCandidate({ transcript: trimmedInput, history: historyPayload });
     setUserInput("");
+
+    let quickReplyText = "";
+    let replySource = "";
+    setIsStreamingReply(true);
+
+    try {
+      const response = await requestStreamFallback({
+        scenarioId: selectedScenarioId,
+        mode: "immersive",
+        transcript: trimmedInput,
+        history: historyPayload,
+        skipInstantAck: false,
+          preferFastLocal: false
+      });
+
+      if (!response.ok) {
+        throw new Error("快速回复请求失败。");
+      }
+
+      if (response.body && response.headers.get("content-type")?.includes("application/x-ndjson")) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let bufferedText = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+
+          bufferedText += decoder.decode(value, { stream: true });
+          const lines = bufferedText.split("\n");
+          bufferedText = lines.pop() || "";
+
+          lines.forEach((line) => {
+            if (!line.trim()) {
+              return;
+            }
+
+            const data = JSON.parse(line);
+            if (data.type === "accepted") {
+              replySource = data.source || "";
+              setQuickReplySource(replySource);
+              setStreamStatus(`已收到你的句子，正在先生成口语回复。来源：${getReplySourceLabel(replySource)}`);
+              return;
+            }
+
+            if (data.type === "sentence") {
+              if (data.source) {
+                replySource = data.source;
+                setQuickReplySource(replySource);
+              }
+              quickReplyText = `${quickReplyText}${quickReplyText ? " " : ""}${data.text}`.trim();
+              setStreamedReply(quickReplyText);
+              setStreamStatus(
+                `${isFallbackReplySource(data.source || replySource) ? "兜底回复已先返回。" : "AI 已先回复。"}你可以点击按钮获取这句话的完整纠错评分。`
+              );
+              return;
+            }
+
+            if (data.type === "done") {
+              if (data.source) {
+                replySource = data.source;
+                setQuickReplySource(replySource);
+              }
+              quickReplyText = (data.reply || quickReplyText).trim();
+            }
+          });
+        }
+      } else {
+        const data = await response.json();
+        replySource = data.source || "";
+        setQuickReplySource(replySource);
+        quickReplyText = (data.aiReply || "").trim();
+      }
+
+      if (quickReplyText) {
+        const aiMessage = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: quickReplyText
+        };
+        setConversationMessages([...nextMessages, aiMessage]);
+        speakAiReply(quickReplyText);
+      }
+    } catch (error) {
+      setErrorMessage(error.message || "快速回复失败，请确认后端服务已启动。");
+      setConversationMessages(nextMessages);
+    } finally {
+      setIsStreamingReply(false);
+    }
+  }
+
+  async function handleFeedbackSubmit(event) {
+    event.preventDefault();
+
+    if (!feedbackCandidate) {
+      setErrorMessage("请先说一句英文，再获取纠错评分。");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage("");
+    setStreamStatus("正在生成完整纠错评分。");
 
     try {
       const response = await requestCoachPractice({
         scenarioId: selectedScenarioId,
         mode: practiceMode,
-        transcript: trimmedInput,
-        history: buildHistoryPayload(conversationMessages)
+        transcript: feedbackCandidate.transcript,
+        history: feedbackCandidate.history
       });
-
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.message || "提交失败，请稍后重试。");
       }
 
-      const aiMessage = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: data.aiReply
-      };
       setPracticeResult(data);
-      setConversationMessages([...nextMessages, aiMessage]);
-      speakAiReply(data.aiReply);
+      setFeedbackCandidate(null);
+      setStreamStatus("完整纠错评分已生成。");
     } catch (error) {
-      setConversationMessages(conversationMessages);
       setErrorMessage(
         error.message === "Failed to fetch"
           ? "请求后端失败，请确认后端服务已启动：http://localhost:3001"
@@ -655,7 +826,6 @@ function App() {
     event.preventDefault();
     await submitPracticeText(userInput);
   }
-
   function handleStreamingSubmit() {
     const trimmedInput = userInput.trim();
 
@@ -942,35 +1112,22 @@ function App() {
     }
   }
 
-  function handleQwenAsrEvent(event) {
+  function handleQwenSentenceEvent(event) {
     if (event.type === "session.created" || event.type === "session.updated") {
-      setRecognitionStatus("Qwen ASR 已连接，请说一句英文。");
+      setQuickReplySource("qwen-realtime");
+      setRecognitionStatus("Qwen 实时语音已连接，请说一句英文。");
       return;
     }
 
     if (event.type === "input_audio_buffer.speech_started") {
       setRecognitionStatus("正在听你说话...");
       qwenAsrTranscriptRef.current = "";
+      qwenSentenceReplyRef.current = "";
       return;
     }
 
     if (event.type === "input_audio_buffer.speech_stopped") {
-      setRecognitionStatus("已检测到停顿，正在确认识别文本...");
-      return;
-    }
-
-    if (event.type?.includes("input_audio_transcription") && event.type.endsWith(".completed")) {
-      if (event.transcript) {
-        qwenAsrTranscriptRef.current = event.transcript;
-        setUserInput(event.transcript);
-      }
-      const transcript = qwenAsrTranscriptRef.current.trim();
-      stopRealtimeConversation();
-      setRecognitionStatus(transcript ? "Qwen ASR 识别完成，正在生成纠错评分。" : "未识别到内容，请再试一次。");
-
-      if (transcript) {
-        submitPracticeText(transcript);
-      }
+      setRecognitionStatus("已检测到停顿，Qwen 正在识别并回复...");
       return;
     }
 
@@ -983,9 +1140,57 @@ function App() {
     if (event.type?.includes("input_audio_transcription") && event.transcript) {
       qwenAsrTranscriptRef.current = event.transcript;
       setUserInput(event.transcript);
+
+      if (event.type.endsWith(".completed") && event.transcript.trim()) {
+        const transcript = event.transcript.trim();
+        const userMessage = {
+          id: crypto.randomUUID(),
+          role: "user",
+          content: transcript
+        };
+        const historyPayload = buildHistoryPayload(conversationMessages);
+        setConversationMessages((messages) => [...messages, userMessage]);
+        setFeedbackCandidate({ transcript, history: historyPayload });
+        setPracticeResult(null);
+        setRecognitionStatus("Qwen 已识别，正在生成语音回复。需要评分时稍后点击纠错评分按钮。");
+      }
+      return;
+    }
+
+    if (event.type === "response.audio.delta" && event.delta) {
+      playRealtimePcmAudio(event.delta);
+      setRecognitionStatus("Qwen 正在播放实时回复。");
+      return;
+    }
+
+    if ((event.type === "response.audio_transcript.delta" || event.type === "response.text.delta") && event.delta) {
+      qwenSentenceReplyRef.current += event.delta;
+      setStreamedReply(qwenSentenceReplyRef.current);
+      setStreamStatus("Qwen Realtime 已先回复。你可以点击按钮获取这句话的完整纠错评分。");
+      return;
+    }
+
+    if (event.type === "response.done") {
+      const reply = qwenSentenceReplyRef.current.trim();
+      if (reply) {
+        const assistantMessage = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: reply
+        };
+        setConversationMessages((messages) => [...messages, assistantMessage]);
+        setRecognitionStatus("Qwen 单句回复完成，可以点击纠错评分按钮。以前端显示来源为 Qwen Realtime。");
+      }
+      stopRealtimeInputOnly();
+      closeRealtimeAudioAfterPlayback();
+      return;
+    }
+
+    if (event.type === "error") {
+      setErrorMessage(event.message || "Qwen 实时语音连接失败。");
+      stopRealtimeConversation();
     }
   }
-
   async function handleQwenSentencePracticeClick() {
     if (isQwenAsrActive) {
       stopRealtimeConversation();
@@ -1008,7 +1213,7 @@ function App() {
           autoGainControl: true
         }
       });
-      const socket = new WebSocket(getQwenRealtimeWebSocketUrl(selectedScenarioId, "asr"));
+      const socket = new WebSocket(getQwenRealtimeWebSocketUrl(selectedScenarioId, "feedback"));
       const source = audioContext.createMediaStreamSource(stream);
       const processor = audioContext.createScriptProcessor(4096, 1, 1);
 
@@ -1018,23 +1223,26 @@ function App() {
       realtimeSourceRef.current = source;
       realtimeProcessorRef.current = processor;
       qwenAsrTranscriptRef.current = "";
+      qwenSentenceReplyRef.current = "";
 
       setErrorMessage("");
       setUserInput("");
+      setStreamedReply("");
+      setQuickReplySource("qwen-realtime");
       setIsQwenAsrActive(true);
-      setRecognitionStatus("正在连接 Qwen 实时识别...");
+      setRecognitionStatus("正在连接 Qwen 单句实时语音对话...");
 
       socket.addEventListener("message", (message) => {
         try {
-          handleQwenAsrEvent(JSON.parse(message.data));
+          handleQwenSentenceEvent(JSON.parse(message.data));
         } catch {
-          setRecognitionStatus("收到 Qwen ASR 事件，但解析失败。");
+          setRecognitionStatus("收到 Qwen 单句语音事件，但解析失败。");
         }
       });
 
       socket.addEventListener("error", () => {
         stopRealtimeConversation();
-        setErrorMessage("Qwen ASR 连接失败，请确认 DASHSCOPE_API_KEY 和后端服务。");
+        setErrorMessage("Qwen 单句实时语音连接失败，请确认 DASHSCOPE_API_KEY 和后端服务。");
       });
 
       socket.addEventListener("close", () => {
@@ -1294,15 +1502,16 @@ function App() {
             )}
 
             {!isImmersiveMode ? (
-              <form className="input-panel" onSubmit={handleSubmit}>
+              <>
+                <div className="input-panel">
                 <button
                   className={isQwenAsrActive ? "record-button recording" : "record-button"}
                   onClick={handleQwenSentencePracticeClick}
                   type="button"
-                  aria-label={isQwenAsrActive ? "停止单句识别" : "录一句并识别"}
+                  aria-label={isQwenAsrActive ? "停止单句对话" : "录一句并对话"}
                 >
                   <span className="record-dot" />
-                  {isQwenAsrActive ? "停止识别" : "录一句并识别"}
+                  {isQwenAsrActive ? "停止对话" : "录一句并对话"}
                 </button>
                 <textarea
                   disabled={isConversationEnded}
@@ -1311,44 +1520,53 @@ function App() {
                   rows={4}
                   value={userInput}
                 />
-                <button className="submit-button" disabled={isSubmitting || isConversationEnded} type="submit">
-                  {isSubmitting ? "分析中..." : "获取完整纠错评分"}
-                </button>
-              </form>
+              </div>
+              <button
+                className="feedback-submit-button"
+                disabled={isSubmitting || isConversationEnded || !feedbackCandidate}
+                onClick={handleFeedbackSubmit}
+                type="button"
+              >
+                {isSubmitting ? "生成纠错评分中..." : "获取完整纠错评分"}
+              </button>
+              </>
             ) : (
               <div className="mode-guide">
                 沉浸式对话中不做逐句纠错；点击下方 Qwen 实时语音对话开始练习，结束后统一生成总结。
               </div>
             )}
 
-            <div className="realtime-panel">
-              <button
-                className={isRealtimeActive ? "realtime-button active" : "realtime-button"}
-                disabled={isConversationEnded}
-                onClick={handleRealtimeConversationClick}
-                type="button"
-              >
-                {isRealtimeActive ? "停止 Qwen 实时对话" : "开始 Qwen 实时语音对话"}
-              </button>
-              <div>
-                <p className="section-label">Qwen3.5-Omni-Realtime</p>
-                <p>{realtimeStatus}</p>
+            {isImmersiveMode && (
+              <div className="realtime-panel">
+                <button
+                  className={isRealtimeActive ? "realtime-button active" : "realtime-button"}
+                  disabled={isConversationEnded}
+                  onClick={handleRealtimeConversationClick}
+                  type="button"
+                >
+                  {isRealtimeActive ? "停止 Qwen 实时对话" : "开始 Qwen 实时语音对话"}
+                </button>
+                <div>
+                  <p className="section-label">Qwen3.5-Omni-Realtime</p>
+                  <p>{realtimeStatus}</p>
+                </div>
+                <div className="realtime-copy">
+                  <span>你说的话</span>
+                  <p>{realtimeTranscript || "开始后直接对麦克风说英文，这里会显示实时识别文本。"}</p>
+                </div>
+                <div className="realtime-copy">
+                  <span>实时回复</span>
+                  <p>{realtimeReply || "模型的实时语音回复文本会显示在这里，音频会直接播放。"}</p>
+                </div>
               </div>
-              <div className="realtime-copy">
-                <span>你说的话</span>
-                <p>{realtimeTranscript || "开始后直接对麦克风说英文，这里会显示实时识别文本。"}</p>
-              </div>
-              <div className="realtime-copy">
-                <span>实时回复</span>
-                <p>{realtimeReply || "模型的实时语音回复文本会显示在这里，音频会直接播放。"}</p>
-              </div>
-            </div>
+            )}
 
             {!isImmersiveMode && (
               <div className="recording-panel">
                 <div>
                   <p className="section-label">单句识别状态</p>
                   <p>{recognitionStatus}</p>
+                  {(isStreamingReply || isSubmitting || streamedReply) && <p className="muted-card">{streamStatus}</p>}
                 </div>
               </div>
             )}
@@ -1378,7 +1596,16 @@ function App() {
 
             <section className="feedback-card">
               <p className="section-label">反馈来源</p>
-              <p>{practiceResult ? getFeedbackSourceLabel(practiceResult) : "实时对话由 Qwen3.5-Omni-Realtime 负责；完整纠错评分提交后显示。"}</p>
+              <p>
+                {practiceResult
+                  ? getFeedbackSourceLabel(practiceResult)
+                  : isImmersiveMode
+                    ? "沉浸式对话由 Qwen3.5-Omni-Realtime 负责；结束后生成课后总结。"
+                    : `逐句反馈由 Qwen Realtime 识别并先回复；当前回复来源：${getReplySourceLabel(quickReplySource)}。纠错评分点击后由 DeepSeek 生成。`}
+              </p>
+              {!isImmersiveMode && isFallbackReplySource(quickReplySource) && (
+                <p className="warning-text">当前快速回复使用本地兜底，不是模型真实回复。请检查 DeepSeek Key、网络或后端日志。</p>
+              )}
               {practiceResult?.warning && <p className="warning-text">{practiceResult.warning}</p>}
             </section>
 

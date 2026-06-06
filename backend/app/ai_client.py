@@ -1,4 +1,7 @@
+import asyncio
 import json
+import urllib.error
+import urllib.request
 from typing import Any
 
 from app.config import get_ai_provider_config
@@ -109,25 +112,40 @@ async def invoke_deepseek_json(prompt: str, temperature: float) -> dict[str, Any
     if not config:
         return None
 
-    try:
-        from langchain_core.messages import HumanMessage, SystemMessage
-        from langchain_deepseek import ChatDeepSeek
-    except ImportError as error:
-        raise RuntimeError("LangChain DeepSeek 依赖未安装，请执行 npm run install:all。") from error
+    payload = {
+        "model": config["model"],
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": temperature,
+        "response_format": {"type": "json_object"},
+    }
 
-    model = ChatDeepSeek(
-        model=config["model"],
-        api_key=config["api_key"],
-        temperature=temperature,
-    ).bind(response_format={"type": "json_object"})
-    response = await model.ainvoke(
-        [
-            SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=prompt),
-        ]
-    )
+    def send_request() -> dict[str, Any]:
+        request = urllib.request.Request(
+            config["base_url"].rstrip("/") + "/chat/completions",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {config['api_key']}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=45) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as error:
+            detail = error.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"DeepSeek HTTP {error.code}: {detail}") from error
+        except urllib.error.URLError as error:
+            raise RuntimeError(f"DeepSeek 网络请求失败: {error.reason}") from error
 
-    content = response.content
+    response_data = await asyncio.to_thread(send_request)
+    choices = response_data.get("choices") if isinstance(response_data, dict) else None
+    first_choice = choices[0] if choices else {}
+    message = first_choice.get("message") if isinstance(first_choice, dict) else {}
+    content = message.get("content") if isinstance(message, dict) else None
     if not isinstance(content, str) or not content.strip():
         raise RuntimeError("DeepSeek 没有返回可解析内容。")
 
