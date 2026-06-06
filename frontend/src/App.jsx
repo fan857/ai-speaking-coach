@@ -64,6 +64,16 @@ const issuePriorityLabels = {
   low: "进阶打磨"
 };
 
+const requirementTags = ["实时语音对话", "场景化训练", "语法纠错", "发音可懂度评估", "课后总结", "量化反馈"];
+
+const scoreReasonFallbacks = {
+  fluency: "句子是否连贯、是否有明显停顿。",
+  pronunciation: "系统是否能稳定识别用户表达，并判断整体发音可懂度。",
+  grammar: "句法结构、时态和基本语法是否准确。",
+  naturalness: "表达是否符合真实英语场景和自然交流习惯。",
+  taskCompletion: "是否回应了 AI 的问题，并推动本轮对话继续进行。"
+};
+
 function getSpeechRecognitionConstructor() {
   return window.SpeechRecognition || window.webkitSpeechRecognition;
 }
@@ -359,6 +369,14 @@ function getTrendText(history) {
   return `本次综合均分 ${current}，与上次持平。`;
 }
 
+function getLatestUserText(messages) {
+  return [...messages].reverse().find((message) => message.role === "user")?.content || "";
+}
+
+function getListOrFallback(value, fallback) {
+  return Array.isArray(value) && value.length ? value : fallback;
+}
+
 function App() {
   const [selectedScenarioId, setSelectedScenarioId] = useState("interview");
   const [practiceMode, setPracticeMode] = useState("feedback");
@@ -379,7 +397,7 @@ function App() {
   const [audioBlobSize, setAudioBlobSize] = useState(0);
   const [isRecognizing, setIsRecognizing] = useState(false);
   const [recognitionStatus, setRecognitionStatus] =
-    useState("点击“录一句并对话”后，Qwen Realtime 会识别并先回复；需要评分时再点击纠错评分按钮。");
+    useState("点击“开始说话”后，Qwen Realtime 会识别并先回复；需要评分时再点击纠错评分按钮。");
   const [isConversationEnded, setIsConversationEnded] = useState(false);
   const [speechStatus, setSpeechStatus] = useState("AI 回复后会自动英文朗读。");
   const [isStreamingReply, setIsStreamingReply] = useState(false);
@@ -425,6 +443,76 @@ function App() {
     const latestAssistantMessage = [...conversationMessages].reverse().find((message) => message.role === "assistant");
     return latestAssistantMessage?.content || realtimeReply || practiceResult?.aiReply || "";
   }, [conversationMessages, practiceResult, realtimeReply]);
+  const userTurnCount = useMemo(
+    () => conversationMessages.filter((message) => message.role === "user").length,
+    [conversationMessages]
+  );
+  const aiStatus = useMemo(() => {
+    if (isQwenAsrActive) {
+      return "正在听";
+    }
+    if (isRealtimeActive) {
+      return "实时对话中";
+    }
+    if (isSummarizing) {
+      return "生成报告中";
+    }
+    if (isSubmitting || isStreamingReply) {
+      return "思考中";
+    }
+    if (speechStatus.startsWith("正在朗读") || speechStatus.startsWith("正在播放")) {
+      return "AI 正在说话";
+    }
+    return "等待用户";
+  }, [isQwenAsrActive, isRealtimeActive, isSubmitting, isSummarizing, isStreamingReply, speechStatus]);
+  const summaryReport = useMemo(() => {
+    const latestText = getLatestUserText(conversationMessages);
+    const latestIssues = practiceResult?.issues || [];
+    const scores = summaryResult?.scores || practiceResult?.scores || {};
+    const totalScore = calculateAverageScore(scores);
+    const recommendedFromIssues = latestIssues.map((issue) => issue.practiceSentence).filter(Boolean);
+
+    return {
+      totalScore,
+      turns: userTurnCount,
+      summary:
+        summaryResult?.summary ||
+        (userTurnCount
+          ? `已完成 ${userTurnCount} 轮${selectedScenario.title}练习，可根据右侧反馈继续打磨表达。`
+          : "完成至少一轮对话后，这里会生成课后报告。"),
+      highlights: getListOrFallback(summaryResult?.highlights, [
+        userTurnCount ? "已经完成真实场景下的多轮英语表达。" : "开始对话后会记录本轮训练亮点。",
+        latestText ? "系统已记录最近一轮语音识别结果，可用于后续纠错。" : "逐句反馈会保留用户表达和 AI 回复。"
+      ]),
+      weaknesses: getListOrFallback(
+        summaryResult?.weaknesses,
+        latestIssues.length
+          ? latestIssues.map((issue) => issue.explanation)
+          : ["结束对话后会根据全程记录归纳高频语法、用词和自然表达问题。"]
+      ),
+      recommendedExpressions: getListOrFallback(recommendedFromIssues, [
+        selectedScenario.id === "restaurant"
+          ? "Just lemon, please. That's all I need."
+          : selectedScenario.id === "meeting"
+            ? "This week I finished the main task and I need help with one blocker."
+            : "I built this project to solve a real user problem."
+      ]),
+      nextSteps: getListOrFallback(summaryResult?.nextSteps, [
+        "继续完成 3 到 5 轮同场景对话，训练连续表达。",
+        "优先复练右侧标记为“优先修正”的问题。",
+        "重听 AI 回复并跟读推荐表达，提高发音可懂度。"
+      ]),
+      warning: summaryResult?.warning,
+      source: summaryResult?.source
+    };
+  }, [conversationMessages, practiceResult, selectedScenario, summaryResult, userTurnCount]);
+  const recordButtonLabel = isQwenAsrActive
+    ? "正在识别"
+    : isSubmitting
+      ? "AI 回复中"
+      : practiceResult
+        ? "继续下一句"
+        : "开始说话";
 
   useEffect(() => {
     return () => {
@@ -550,7 +638,7 @@ function App() {
     streamSocketRef.current?.close();
     stopRealtimeConversation();
     setSpeechStatus("AI 回复后会自动英文朗读。");
-    setRecognitionStatus("点击“录一句并对话”后，Qwen Realtime 会识别并先回复；需要评分时再点击纠错评分按钮。");
+    setRecognitionStatus("点击“开始说话”后，Qwen Realtime 会识别并先回复；需要评分时再点击纠错评分按钮。");
   }
 
   function handleScenarioChange(scenarioId) {
@@ -1557,9 +1645,36 @@ function App() {
           <div>
             <p className="eyebrow">七牛云 x XEngineer MVP</p>
             <h1>AI 英语口语陪练</h1>
+            <p className="product-slogan">通过真实场景多轮对话，训练英语表达、发音清晰度和自然交流能力。</p>
           </div>
           <div className="status-pill">{selectedMode.label}</div>
         </header>
+
+        <section className="product-overview" aria-label="当前训练状态">
+          <div className="training-status-card">
+            <div>
+              <span>当前场景</span>
+              <strong>{selectedScenario.title}</strong>
+            </div>
+            <div>
+              <span>当前模式</span>
+              <strong>{selectedMode.label}</strong>
+            </div>
+            <div>
+              <span>对话轮数</span>
+              <strong>{userTurnCount}</strong>
+            </div>
+            <div>
+              <span>AI 状态</span>
+              <strong>{aiStatus}</strong>
+            </div>
+          </div>
+          <div className="requirement-tags" aria-label="题目要求命中点">
+            {requirementTags.map((tag) => (
+              <span key={tag}>{tag}</span>
+            ))}
+          </div>
+        </section>
 
         <section className="scenario-panel" aria-labelledby="scenario-title">
           <div>
@@ -1593,6 +1708,10 @@ function App() {
               练习模式
             </p>
             <p>{selectedMode.description}</p>
+            <div className="mode-explainer">
+              <span>逐句反馈：适合纠错训练，每轮后主动查看评分和建议。</span>
+              <span>沉浸式对话：适合模拟真实交流，对话中不打断，结束后统一总结。</span>
+            </div>
           </div>
           <div className="mode-tabs" role="tablist" aria-label="练习模式">
             {practiceModes.map((mode) => (
@@ -1611,16 +1730,16 @@ function App() {
         <section className="conversation-grid">
           <div className="conversation-panel">
             <div className="panel-header">
-              <p className="section-label">对话展示</p>
+              <p className="section-label">实时对话训练</p>
               <span>{selectedScenario.role}</span>
             </div>
 
             <div className="message ai-message">
               <div className="message-header">
-                <span>AI</span>
+                <span>AI 语音回复</span>
                 <div className="message-actions">
                   <button className="replay-button" onClick={() => handleReplayAiReply(selectedScenario.prompt)} type="button">
-                    重读
+                    重听 AI 回复
                   </button>
                   <button
                     className="replay-button"
@@ -1644,7 +1763,7 @@ function App() {
                   key={message.id}
                 >
                   <div className="message-header">
-                    <span>{message.role === "user" ? "You" : "AI"}</span>
+                    <span>{message.role === "user" ? "语音识别结果" : "AI 语音回复"}</span>
                     <div className="message-actions">
                       {message.role === "assistant" && (
                         <button
@@ -1652,7 +1771,7 @@ function App() {
                           onClick={() => handleReplayAiReply(message.content)}
                           type="button"
                         >
-                          重读
+                          重听 AI 回复
                         </button>
                       )}
                       <button
@@ -1685,10 +1804,10 @@ function App() {
                   className={isQwenAsrActive ? "record-button recording" : "record-button"}
                   onClick={handleQwenSentencePracticeClick}
                   type="button"
-                  aria-label={isQwenAsrActive ? "停止单句对话" : "录一句并对话"}
+                  aria-label={isQwenAsrActive ? "正在识别单句对话" : "开始说话"}
                 >
                   <span className="record-dot" />
-                  {isQwenAsrActive ? "停止对话" : practiceResult ? "继续下一句" : "录一句并对话"}
+                  {recordButtonLabel}
                 </button>
                 <textarea
                   disabled={isConversationEnded}
@@ -1709,7 +1828,7 @@ function App() {
               </>
             ) : (
               <div className="mode-guide">
-                沉浸式对话中不做逐句纠错；点击下方 Qwen 实时语音对话开始练习，结束后统一生成总结。
+                沉浸式对话中不做逐句纠错；点击下方 Qwen 实时语音对话开始练习，结束后统一生成课后报告。
               </div>
             )}
 
@@ -1748,13 +1867,23 @@ function App() {
               </div>
             )}
 
+            <div className="pipeline-card">
+              <p className="section-label">实时链路说明</p>
+              <div className="pipeline-steps">
+                <span>语音识别完成后立即显示用户文本</span>
+                <span>AI 回复返回后立即展示并朗读</span>
+                <span>详细纠错和总结延后生成，避免打断对话</span>
+                {firstSentenceLatency !== null && <span>首句响应记录：{firstSentenceLatency} ms</span>}
+              </div>
+            </div>
+
             <div className="conversation-actions">
               <button
                 disabled={isConversationEnded || isSummarizing || !conversationMessages.length}
                 onClick={handleEndConversation}
                 type="button"
               >
-                {isSummarizing ? "生成总结中..." : "结束并总结"}
+                {isSummarizing ? "生成课后报告中..." : "结束对话并生成课后报告"}
               </button>
               <button onClick={resetConversation} type="button">
                 重新开始对话
@@ -1765,6 +1894,16 @@ function App() {
           </div>
 
           <aside className="feedback-stack">
+            <div className="feedback-center-header">
+              <p className="section-label">训练反馈中心</p>
+              <h2>当前句反馈、能力评分与课后总结</h2>
+            </div>
+
+            <div className="feedback-section-heading">
+              <span>训练状态</span>
+              <p>展示纠错时机、反馈来源和语音播放状态。</p>
+            </div>
+
             <section className="feedback-card">
               <p className="section-label">当前模式</p>
               <p>{selectedMode.label}</p>
@@ -1791,6 +1930,11 @@ function App() {
               <p>{speechStatus}</p>
             </section>
 
+            <div className="feedback-section-heading">
+              <span>课后总结</span>
+              <p>结束训练后生成正式报告；数据不足时会基于已完成对话给出兜底报告。</p>
+            </div>
+
             <section className="feedback-card summary-card">
               <div className="feedback-title-row">
                 <p className="section-label">课后总结</p>
@@ -1798,59 +1942,74 @@ function App() {
               </div>
               {isSummarizing ? (
                 <p>正在根据全程对话生成总结...</p>
-              ) : summaryResult ? (
+              ) : userTurnCount || summaryResult ? (
                 <>
-                  <p>{summaryResult.summary}</p>
-                  {summaryResult.warning && <p className="warning-text">{summaryResult.warning}</p>}
+                  <div className="report-kpis">
+                    <div>
+                      <span>本次总分</span>
+                      <strong>{summaryReport.totalScore || "待生成"}</strong>
+                    </div>
+                    <div>
+                      <span>完成轮数</span>
+                      <strong>{summaryReport.turns}</strong>
+                    </div>
+                  </div>
+                  <p>{summaryReport.summary}</p>
+                  {summaryReport.warning && <p className="warning-text">{summaryReport.warning}</p>}
                   <div className="summary-grid">
                     <div>
-                      <span>亮点</span>
+                      <span>主要优点</span>
                       <ul>
-                        {summaryResult.highlights.map((item) => (
+                        {summaryReport.highlights.map((item) => (
                           <li key={item}>{item}</li>
                         ))}
                       </ul>
                     </div>
                     <div>
-                      <span>待加强</span>
+                      <span>高频问题</span>
                       <ul>
-                        {summaryResult.weaknesses.map((item) => (
+                        {summaryReport.weaknesses.map((item) => (
                           <li key={item}>{item}</li>
                         ))}
                       </ul>
                     </div>
                     <div>
-                      <span>下一步</span>
+                      <span>推荐表达</span>
                       <ul>
-                        {summaryResult.nextSteps.map((item) => (
+                        {summaryReport.recommendedExpressions.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <span>下一次训练建议</span>
+                      <ul>
+                        {summaryReport.nextSteps.map((item) => (
                           <li key={item}>{item}</li>
                         ))}
                       </ul>
                     </div>
                   </div>
-                  <div className="score-list compact-score-list">
-                    {Object.entries(summaryResult.scores).map(([key, value]) => (
-                      <ScoreBar
-                        key={key}
-                        label={scoreLabels[key] || key}
-                        reason={summaryResult.scoreReasons?.[key]}
-                        value={value}
-                      />
-                    ))}
-                  </div>
-                  <div className="trend-panel">
-                    <div>
-                      <span>综合均分</span>
-                      <strong>{calculateAverageScore(summaryResult.scores)}</strong>
+                  {summaryResult?.scores && (
+                    <div className="trend-panel">
+                      <div>
+                        <span>综合均分</span>
+                        <strong>{calculateAverageScore(summaryResult.scores)}</strong>
+                      </div>
+                      <p>{getTrendText(summaryHistory)}</p>
                     </div>
-                    <p>{getTrendText(summaryHistory)}</p>
-                  </div>
-                  {summaryResult.scoreBasis && <p className="score-basis">{summaryResult.scoreBasis}</p>}
+                  )}
+                  {summaryResult?.scoreBasis && <p className="score-basis">{summaryResult.scoreBasis}</p>}
                 </>
               ) : (
                 <p>结束对话后，这里会生成全程表现总结、评分依据、薄弱点和下一步训练建议。</p>
               )}
             </section>
+
+            <div className="feedback-section-heading">
+              <span>当前句反馈</span>
+              <p>逐句模式下，先保证 AI 接话流畅，再按需生成详细纠错。</p>
+            </div>
 
             <section className="feedback-card">
               <div className="feedback-title-row">
@@ -1861,7 +2020,7 @@ function App() {
                     onClick={() => handleReplayAiReply(displayAiReply)}
                     type="button"
                   >
-                    重读
+                    重听 AI 回复
                   </button>
                 )}
               </div>
@@ -1871,7 +2030,7 @@ function App() {
             {isImmersiveMode ? (
               <section className="feedback-card">
                 <p className="section-label">沉浸对话说明</p>
-                <p>当前模式不进行即时纠错和评分，先保证英语对话流畅。点击“结束并总结”后，会基于全程对话生成课后总结、薄弱点和训练重点。</p>
+                <p>当前模式不进行即时纠错和评分，先保证英语对话流畅。点击“结束对话并生成课后报告”后，会基于全程对话生成课后总结、薄弱点和训练重点。</p>
               </section>
             ) : (
               <>
@@ -1924,6 +2083,11 @@ function App() {
                   )}
                 </section>
 
+                <div className="feedback-section-heading">
+                  <span>能力评分</span>
+                  <p>五维评分用于量化本轮口语表现，发音项为 MVP 级可懂度估算。</p>
+                </div>
+
                 <section className="feedback-card">
                   <p className="section-label">评分面板</p>
                   {practiceResult ? (
@@ -1932,7 +2096,7 @@ function App() {
                         <ScoreBar
                           key={key}
                           label={scoreLabels[key] || key}
-                          reason={practiceResult.scoreReasons?.[key]}
+                          reason={practiceResult.scoreReasons?.[key] || scoreReasonFallbacks[key]}
                           value={value}
                         />
                       ))}
