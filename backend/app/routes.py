@@ -2,11 +2,11 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from app.ai_client import request_ai_coach_result, request_ai_summary_result
+from app.ai_client import request_ai_coach_result, request_ai_summary_result, request_ai_translation_result
 from app.config import get_ai_provider_status
 from app.mock_feedback import get_mock_immersive_result, get_mock_practice_result, get_mock_summary_result
 from app.scenarios import SCENARIOS
-from app.schemas import PracticeRequest, SummaryRequest
+from app.schemas import PracticeRequest, SummaryRequest, TranslationRequest
 
 
 router = APIRouter(prefix="/api")
@@ -36,6 +36,13 @@ def get_mock_result(request: PracticeRequest, transcript: str) -> dict[str, Any]
         return get_mock_immersive_result(request.scenarioId, transcript, request.history)
 
     return get_mock_practice_result(request.scenarioId, transcript, request.history)
+
+
+def validate_translation_request(request: TranslationRequest) -> str:
+    text = request.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="翻译内容不能为空。")
+    return text[:1200]
 
 
 @router.get("/health")
@@ -115,6 +122,29 @@ async def practice_coach(request: PracticeRequest) -> dict[str, Any]:
         **get_mock_result(request, transcript),
         "source": "mock",
         "warning": "未配置 DEEPSEEK_API_KEY，已使用 mock 结果兜底。",
+    }
+
+
+@router.post("/practice/translate")
+async def practice_translate(request: TranslationRequest) -> dict[str, Any]:
+    text = validate_translation_request(request)
+
+    try:
+        ai_result = await request_ai_translation_result(text)
+        if ai_result and ai_result.get("translation"):
+            return {
+                "text": text,
+                "translation": ai_result["translation"],
+                "source": ai_result["provider"],
+            }
+    except Exception as error:
+        print(error)
+
+    return {
+        "text": text,
+        "translation": "翻译服务暂不可用，请检查 DeepSeek API Key 或网络后重试。",
+        "source": "fallback",
+        "warning": "真实 AI 翻译请求失败，已返回兜底提示。",
     }
 
 

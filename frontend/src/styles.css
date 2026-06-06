@@ -160,7 +160,7 @@ h2 {
 
 .conversation-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(330px, 0.8fr);
+  grid-template-columns: minmax(0, 1.35fr) minmax(380px, 0.95fr);
   gap: 18px;
   align-items: start;
 }
@@ -207,6 +207,13 @@ h2 {
   margin-bottom: 5px;
 }
 
+.message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .message-header span {
   margin-bottom: 0;
 }
@@ -214,6 +221,14 @@ h2 {
 .message p {
   margin-bottom: 0;
   line-height: 1.55;
+}
+
+.translation-text {
+  margin-top: 9px;
+  border-top: 1px solid rgba(83, 111, 150, 0.18);
+  padding-top: 9px;
+  color: #40546f;
+  font-size: 0.92rem;
 }
 
 .ai-message {
@@ -269,6 +284,15 @@ h2 {
   grid-template-columns: 142px minmax(0, 1fr);
   gap: 10px;
   margin-top: 18px;
+}
+
+.compact-input-panel {
+  grid-template-columns: 132px minmax(0, 1fr);
+  margin-top: 14px;
+}
+
+.compact-input-panel textarea {
+  min-height: 76px;
 }
 
 .record-button,
@@ -341,6 +365,12 @@ textarea:disabled {
   background: #167f92;
 }
 
+.feedback-submit-button:disabled {
+  color: #6f7d8e;
+  background: #e8eef5;
+  cursor: not-allowed;
+}
+
 .feedback-submit-button:disabled,
 .realtime-button:disabled,
 .conversation-actions button:disabled {
@@ -393,7 +423,8 @@ textarea:disabled {
 
 .realtime-copy span,
 .summary-grid span,
-.correction span {
+.correction span,
+.issue-body span {
   display: block;
   margin-bottom: 4px;
   color: #536173;
@@ -536,10 +567,81 @@ textarea:disabled {
 
 .correction {
   gap: 12px;
+  margin-top: 12px;
+  border-top: 1px solid #dbe5ef;
+  padding-top: 12px;
 }
 
 .correction p {
   margin-bottom: 0;
+}
+
+.issue-list {
+  display: grid;
+  gap: 10px;
+}
+
+.issue-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #cdddf0;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(27, 47, 78, 0.06);
+}
+
+.issue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.issue-header span {
+  color: #244268;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.priority-badge {
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #1d3554;
+  background: #e8eff8;
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.priority-badge.high {
+  color: #8a2c0d;
+  background: #fff0e6;
+}
+
+.priority-badge.medium {
+  color: #775900;
+  background: #fff8d7;
+}
+
+.priority-badge.low {
+  color: #0b6757;
+  background: #e9f8f2;
+}
+
+.issue-body {
+  display: grid;
+  gap: 9px;
+}
+
+.issue-body div {
+  border-left: 3px solid #e3edf8;
+  padding-left: 9px;
+}
+
+.issue-body p {
+  margin: 0;
+  color: #1f2d3d;
+  line-height: 1.45;
 }
 
 .score-row {

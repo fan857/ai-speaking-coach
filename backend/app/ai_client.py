@@ -5,7 +5,7 @@ import urllib.request
 from typing import Any
 
 from app.config import get_ai_provider_config
-from app.prompts import get_coach_prompt, get_summary_prompt
+from app.prompts import get_coach_prompt, get_summary_prompt, get_translation_prompt
 from app.schemas import ConversationMessage
 from app.text_utils import clamp_score, normalize_sentence
 
@@ -14,6 +14,58 @@ SYSTEM_PROMPT = (
     "You are a strict but encouraging English speaking coach. "
     "You must always return valid JSON."
 )
+
+ISSUE_TYPES = {
+    "Grammar",
+    "Word Choice",
+    "Natural Expression",
+    "Fluency",
+    "Pronunciation Clarity",
+}
+
+ISSUE_PRIORITIES = {"high", "medium", "low"}
+
+
+def normalize_issue(
+    issue: dict[str, Any],
+    transcript: str,
+    correction: dict[str, Any],
+    fallback_priority: str = "medium",
+) -> dict[str, str]:
+    issue_type = str(issue.get("type") or "Natural Expression")
+    if issue_type not in ISSUE_TYPES:
+        issue_type = "Natural Expression"
+
+    priority = str(issue.get("priority") or fallback_priority).lower()
+    if priority not in ISSUE_PRIORITIES:
+        priority = fallback_priority
+
+    suggestion = str(issue.get("suggestion") or correction.get("improved") or normalize_sentence(transcript))
+    practice_sentence = str(issue.get("practiceSentence") or suggestion)
+
+    return {
+        "type": issue_type,
+        "priority": priority,
+        "original": str(issue.get("original") or transcript),
+        "suggestion": suggestion,
+        "explanation": str(issue.get("explanation") or correction.get("reason") or "建议使用更自然、完整的英文表达。"),
+        "practiceSentence": practice_sentence,
+    }
+
+
+def build_default_issue(transcript: str, correction: dict[str, Any]) -> dict[str, str]:
+    return normalize_issue(
+        {
+            "type": "Natural Expression",
+            "priority": "medium",
+            "original": transcript,
+            "suggestion": correction.get("improved") or normalize_sentence(transcript),
+            "explanation": correction.get("reason") or "本句可以继续练习更自然、完整的英文表达。",
+            "practiceSentence": correction.get("improved") or normalize_sentence(transcript),
+        },
+        transcript,
+        correction,
+    )
 
 
 def build_empty_feedback(transcript: str) -> dict[str, Any]:
@@ -30,6 +82,7 @@ def build_empty_feedback(transcript: str) -> dict[str, Any]:
             "naturalness": 0,
             "taskCompletion": 0,
         },
+        "issues": [],
         "tips": ["沉浸对话模式下先保持对话流畅，结束后再生成全程总结。"],
     }
 
@@ -44,14 +97,22 @@ def normalize_coach_result(result: dict[str, Any], transcript: str, mode: str) -
     correction = result.get("correction") if isinstance(result.get("correction"), dict) else {}
     scores = result.get("scores") if isinstance(result.get("scores"), dict) else {}
     tips = result.get("tips") if isinstance(result.get("tips"), list) else []
+    issues = result.get("issues") if isinstance(result.get("issues"), list) else []
+    normalized_correction = {
+        "original": transcript,
+        "improved": str(correction.get("improved") or normalize_sentence(transcript)),
+        "reason": str(correction.get("reason") or "建议使用更完整、自然的英文表达。"),
+    }
+    normalized_issues = [
+        normalize_issue(issue, transcript, normalized_correction)
+        for issue in issues
+        if isinstance(issue, dict)
+    ][:3]
 
     return {
         "aiReply": str(result.get("aiReply") or "Could you say a little more about that?"),
-        "correction": {
-            "original": transcript,
-            "improved": str(correction.get("improved") or normalize_sentence(transcript)),
-            "reason": str(correction.get("reason") or "建议使用更完整、自然的英文表达。"),
-        },
+        "correction": normalized_correction,
+        "issues": normalized_issues or [build_default_issue(transcript, normalized_correction)],
         "scores": {
             "fluency": clamp_score(scores.get("fluency")),
             "pronunciation": clamp_score(scores.get("pronunciation")),
@@ -189,6 +250,18 @@ async def request_ai_summary_result(
 
     return {
         **normalize_summary_result(result),
+        "provider": result["provider"],
+        "model": result["model"],
+    }
+
+
+async def request_ai_translation_result(text: str) -> dict[str, Any] | None:
+    result = await invoke_deepseek_json(get_translation_prompt(text), 0.1)
+    if not result:
+        return None
+
+    return {
+        "translation": str(result.get("translation") or ""),
         "provider": result["provider"],
         "model": result["model"],
     }

@@ -8,6 +8,23 @@ def get_history_turn_count(history: list[ConversationMessage]) -> int:
     return len([message for message in history if message.role == "user"])
 
 
+def build_issue(
+    issue_type: str,
+    priority: str,
+    original: str,
+    suggestion: str,
+    explanation: str,
+) -> dict[str, str]:
+    return {
+        "type": issue_type,
+        "priority": priority,
+        "original": original,
+        "suggestion": suggestion,
+        "explanation": explanation,
+        "practiceSentence": suggestion,
+    }
+
+
 def build_interview_result(transcript: str, history: list[ConversationMessage]) -> dict[str, Any]:
     lower_text = transcript.lower()
     turn_count = get_history_turn_count(history)
@@ -35,6 +52,15 @@ def build_interview_result(transcript: str, history: list[ConversationMessage]) 
             "improved": normalize_sentence(transcript),
             "reason": "面试回答建议补充具体职责、量化结果和个人贡献，让表达更有说服力。",
         },
+        "issues": [
+            build_issue(
+                "Natural Expression",
+                "medium",
+                transcript,
+                normalize_sentence(transcript),
+                "面试表达需要更完整地说明背景、个人贡献和结果，避免只给一个很短的回答。",
+            )
+        ],
         "scores": scores,
         "tips": ["回答时尽量使用完整句。", "补充数字、结果或个人贡献会更像真实面试。"],
     }
@@ -65,6 +91,15 @@ def build_restaurant_result(transcript: str, history: list[ConversationMessage])
             "improved": improved,
             "reason": "点餐场景中使用 would like 更礼貌，表达也更自然。",
         },
+        "issues": [
+            build_issue(
+                "Word Choice",
+                "high" if "want order" in lower_text else "medium",
+                transcript,
+                improved,
+                "点餐时用 would like 比 want 更礼貌，也更符合真实餐厅对话。",
+            )
+        ],
         "scores": build_scores(84, 80, 74 if "want order" in lower_text else 82, 83),
         "tips": ["点餐时可以多使用 please 和 would like。", "回答服务员追问时尽量补充冷热、大小或数量。"],
     }
@@ -98,6 +133,15 @@ def build_meeting_result(transcript: str, history: list[ConversationMessage]) ->
             "improved": improved,
             "reason": reason,
         },
+        "issues": [
+            build_issue(
+                "Grammar" if "have finish" in lower_text else "Fluency",
+                "high" if "have finish" in lower_text else "medium",
+                transcript,
+                improved,
+                reason,
+            )
+        ],
         "scores": scores,
         "tips": ["会议表达可以按 progress、blocker、next step 的顺序组织。", "尽量用一句话说明你需要团队提供什么支持。"],
     }
