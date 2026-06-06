@@ -71,3 +71,39 @@ def get_coach_prompt(
         return get_immersive_prompt(scenario_id, transcript, history)
 
     return get_feedback_prompt(scenario_id, transcript, history)
+
+
+def get_summary_prompt(scenario_id: str, history: list[ConversationMessage], mode: str = "immersive") -> str:
+    scenario = SCENARIOS[scenario_id]
+    return "\n".join(
+        [
+            "You are an AI English speaking coach reviewing a completed practice conversation.",
+            f"Practice scenario: {scenario['name']}",
+            f"AI role: {scenario['aiRole']}",
+            f"Practice goal: {scenario['goal']}",
+            f"Practice mode: {mode}",
+            "Full conversation:",
+            format_history_for_prompt(history),
+            "Return JSON only. Do not output Markdown.",
+            "JSON shape:",
+            (
+                '{"summary":"Chinese overall review",'
+                '"highlights":["Chinese highlight 1","Chinese highlight 2"],'
+                '"weaknesses":["Chinese issue 1","Chinese issue 2"],'
+                '"nextSteps":["Chinese exercise 1","Chinese exercise 2"],'
+                '"scores":{"fluency":80,"pronunciation":78,"grammar":76,"naturalness":82},'
+                '"scoreReasons":{"fluency":"Chinese reason",'
+                '"pronunciation":"Chinese reason",'
+                '"grammar":"Chinese reason",'
+                '"naturalness":"Chinese reason"},'
+                '"scoreBasis":"Chinese explanation of what evidence was used"}'
+            ),
+            "Rules:",
+            "1. summary must be concise Chinese, focused on oral practice performance.",
+            "2. highlights, weaknesses and nextSteps each contain 2 to 3 items.",
+            "3. scores are integers from 0 to 100 and must be justified by scoreReasons.",
+            "4. pronunciation means ASR transcription clarity in this prototype, not phoneme-level pronunciation scoring.",
+            "5. scoreBasis must clearly say the score uses conversation transcript, ASR recognizability, and language quality; do not pretend to have phoneme-level audio evidence.",
+            "6. Mention concrete examples from the conversation when useful.",
+        ]
+    )
