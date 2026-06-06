@@ -91,11 +91,12 @@ def get_summary_prompt(scenario_id: str, history: list[ConversationMessage], mod
                 '"highlights":["Chinese highlight 1","Chinese highlight 2"],'
                 '"weaknesses":["Chinese issue 1","Chinese issue 2"],'
                 '"nextSteps":["Chinese exercise 1","Chinese exercise 2"],'
-                '"scores":{"fluency":80,"pronunciation":78,"grammar":76,"naturalness":82},'
+                '"scores":{"fluency":80,"pronunciation":78,"grammar":76,"naturalness":82,"taskCompletion":84},'
                 '"scoreReasons":{"fluency":"Chinese reason",'
                 '"pronunciation":"Chinese reason",'
                 '"grammar":"Chinese reason",'
-                '"naturalness":"Chinese reason"},'
+                '"naturalness":"Chinese reason",'
+                '"taskCompletion":"Chinese reason"},'
                 '"scoreBasis":"Chinese explanation of what evidence was used"}'
             ),
             "Rules:",
@@ -103,7 +104,8 @@ def get_summary_prompt(scenario_id: str, history: list[ConversationMessage], mod
             "2. highlights, weaknesses and nextSteps each contain 2 to 3 items.",
             "3. scores are integers from 0 to 100 and must be justified by scoreReasons.",
             "4. pronunciation means ASR transcription clarity in this prototype, not phoneme-level pronunciation scoring.",
-            "5. scoreBasis must clearly say the score uses conversation transcript, ASR recognizability, and language quality; do not pretend to have phoneme-level audio evidence.",
-            "6. Mention concrete examples from the conversation when useful.",
+            "5. taskCompletion means whether the user completed the scenario goal and responded to follow-up questions.",
+            "6. scoreBasis must clearly say the score uses conversation transcript, ASR recognizability, and language quality; do not pretend to have phoneme-level audio evidence.",
+            "7. Mention concrete examples from the conversation when useful.",
         ]
     )

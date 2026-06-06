@@ -1,4 +1,4 @@
-from typing import Any
+﻿from typing import Any
 
 from app.schemas import ConversationMessage
 from app.text_utils import build_scores, normalize_sentence
@@ -184,12 +184,13 @@ def get_mock_summary_result(scenario_id: str, history: list[ConversationMessage]
         "highlights": ["能够跟随 AI 追问继续表达。", "对话主题保持一致，没有明显跑题。"],
         "weaknesses": ["回答还可以加入更多具体细节。", "部分句子建议使用更完整、更自然的英文结构。"],
         "nextSteps": next_steps,
-        "scores": build_scores(base_score, base_score - 2, base_score - 4, base_score - 1),
+        "scores": build_scores(base_score, base_score - 2, base_score - 4, base_score - 1, base_score + 2),
         "scoreReasons": {
             "fluency": f"本轮共有 {turn_count} 次用户发言，能持续跟随话题，因此按对话连贯度给出估算分。",
             "pronunciation": "当前 mock 无音频特征，只能按 ASR 转写是否形成完整英文句子保守估算。",
             "grammar": "根据用户转写文本的句子完整度和常见语法问题估算。",
             "naturalness": "根据回答是否贴合场景、是否自然承接 AI 追问估算。",
+            "taskCompletion": "根据用户是否围绕当前场景目标推进对话、是否回应 AI 追问和是否完成任务估算。",
         },
         "scoreBasis": "本 MVP 的课后评分基于对话转写、ASR 可识别程度和语言质量；暂不包含音素级发音评测。",
     }

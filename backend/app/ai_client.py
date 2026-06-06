@@ -28,6 +28,7 @@ def build_empty_feedback(transcript: str) -> dict[str, Any]:
             "pronunciation": 0,
             "grammar": 0,
             "naturalness": 0,
+            "taskCompletion": 0,
         },
         "tips": ["沉浸对话模式下先保持对话流畅，结束后再生成全程总结。"],
     }
@@ -56,6 +57,7 @@ def normalize_coach_result(result: dict[str, Any], transcript: str, mode: str) -
             "pronunciation": clamp_score(scores.get("pronunciation")),
             "grammar": clamp_score(scores.get("grammar")),
             "naturalness": clamp_score(scores.get("naturalness")),
+            "taskCompletion": clamp_score(scores.get("taskCompletion")),
         },
         "tips": [str(tip) for tip in tips[:3]]
         if tips
@@ -84,12 +86,14 @@ def normalize_summary_result(result: dict[str, Any]) -> dict[str, Any]:
             "pronunciation": clamp_score(scores.get("pronunciation")),
             "grammar": clamp_score(scores.get("grammar")),
             "naturalness": clamp_score(scores.get("naturalness")),
+            "taskCompletion": clamp_score(scores.get("taskCompletion")),
         },
         "scoreReasons": {
             "fluency": str(score_reasons.get("fluency") or "根据回答长度、轮次衔接和表达连贯度估算。"),
             "pronunciation": str(score_reasons.get("pronunciation") or "根据 Qwen ASR 是否能稳定转写你的英文内容估算，不代表音素级发音评分。"),
             "grammar": str(score_reasons.get("grammar") or "根据对话转写文本中的时态、句子结构和常见语法问题估算。"),
             "naturalness": str(score_reasons.get("naturalness") or "根据表达是否像真实口语、是否自然承接上下文估算。"),
+            "taskCompletion": str(score_reasons.get("taskCompletion") or "根据用户是否完成当前场景目标、是否回应追问和是否推进对话任务估算。"),
         },
         "scoreBasis": str(
             result.get("scoreBasis")

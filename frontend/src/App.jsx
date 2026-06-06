@@ -44,8 +44,11 @@ const scoreLabels = {
   fluency: "表达流畅度",
   pronunciation: "识别清晰度",
   grammar: "语法",
-  naturalness: "表达自然度"
+  naturalness: "表达自然度",
+  taskCompletion: "互动完成度"
 };
+
+const SUMMARY_HISTORY_KEY = "qiniu-speaking-summary-history-v1";
 
 function getSpeechRecognitionConstructor() {
   return window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -257,6 +260,45 @@ function ScoreBar({ label, reason, value }) {
   );
 }
 
+function calculateAverageScore(scores) {
+  const values = Object.values(scores || {}).map((value) => Number(value)).filter((value) => Number.isFinite(value));
+  if (!values.length) {
+    return 0;
+  }
+
+  return Math.round(values.reduce((total, value) => total + value, 0) / values.length);
+}
+
+function loadSummaryHistory() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(SUMMARY_HISTORY_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.slice(0, 5) : [];
+  } catch {
+    return [];
+  }
+}
+
+function getTrendText(history) {
+  if (!history.length) {
+    return "这是本机记录的第一份训练报告。";
+  }
+
+  if (history.length === 1) {
+    return `本次综合均分 ${history[0].averageScore}，继续完成下一轮后会显示趋势。`;
+  }
+
+  const current = history[0].averageScore;
+  const previous = history[1].averageScore;
+  const delta = current - previous;
+  if (delta > 0) {
+    return `本次综合均分 ${current}，比上次提高 ${delta} 分。`;
+  }
+  if (delta < 0) {
+    return `本次综合均分 ${current}，比上次低 ${Math.abs(delta)} 分，建议复练薄弱项。`;
+  }
+  return `本次综合均分 ${current}，与上次持平。`;
+}
+
 function App() {
   const [selectedScenarioId, setSelectedScenarioId] = useState("interview");
   const [practiceMode, setPracticeMode] = useState("feedback");
@@ -264,6 +306,7 @@ function App() {
   const [conversationMessages, setConversationMessages] = useState([]);
   const [practiceResult, setPracticeResult] = useState(null);
   const [summaryResult, setSummaryResult] = useState(null);
+  const [summaryHistory, setSummaryHistory] = useState(loadSummaryHistory);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedbackCandidate, setFeedbackCandidate] = useState(null);
@@ -340,6 +383,20 @@ function App() {
   function updateAudioUrl(nextAudioUrl) {
     audioUrlRef.current = nextAudioUrl;
     setAudioUrl(nextAudioUrl);
+  }
+
+  function saveSummaryHistory(result) {
+    const entry = {
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+      scenarioId: selectedScenarioId,
+      mode: practiceMode,
+      averageScore: calculateAverageScore(result.scores),
+      scores: result.scores
+    };
+    const nextHistory = [entry, ...summaryHistory].slice(0, 5);
+    setSummaryHistory(nextHistory);
+    window.localStorage.setItem(SUMMARY_HISTORY_KEY, JSON.stringify(nextHistory));
   }
 
   function stopMediaStream() {
@@ -1387,6 +1444,7 @@ function App() {
       }
 
       setSummaryResult(data);
+      saveSummaryHistory(data);
       setSpeechStatus("课后总结已生成。");
     } catch (error) {
       setErrorMessage(error.message || "生成课后总结失败，请确认后端服务已启动。");
@@ -1655,11 +1713,18 @@ function App() {
                     {Object.entries(summaryResult.scores).map(([key, value]) => (
                       <ScoreBar
                         key={key}
-                        label={scoreLabels[key]}
+                        label={scoreLabels[key] || key}
                         reason={summaryResult.scoreReasons?.[key]}
                         value={value}
                       />
                     ))}
+                  </div>
+                  <div className="trend-panel">
+                    <div>
+                      <span>综合均分</span>
+                      <strong>{calculateAverageScore(summaryResult.scores)}</strong>
+                    </div>
+                    <p>{getTrendText(summaryHistory)}</p>
                   </div>
                   {summaryResult.scoreBasis && <p className="score-basis">{summaryResult.scoreBasis}</p>}
                 </>
@@ -1733,7 +1798,7 @@ function App() {
                       {Object.entries(practiceResult.scores).map(([key, value]) => (
                         <ScoreBar
                           key={key}
-                          label={scoreLabels[key]}
+                          label={scoreLabels[key] || key}
                           reason={practiceResult.scoreReasons?.[key]}
                           value={value}
                         />
