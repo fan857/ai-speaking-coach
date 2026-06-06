@@ -24,10 +24,15 @@ def build_scores(
     pronunciation: int,
     grammar: int,
     naturalness: int,
+    task_completion: int | None = None,
 ) -> dict[str, int]:
+    if task_completion is None:
+        task_completion = round((fluency + pronunciation + grammar + naturalness) / 4)
+
     return {
         "fluency": fluency,
         "pronunciation": pronunciation,
         "grammar": grammar,
         "naturalness": naturalness,
+        "taskCompletion": task_completion,
     }
