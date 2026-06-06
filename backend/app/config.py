@@ -30,6 +30,7 @@ def get_ai_provider_config() -> dict[str, str] | None:
             "provider": "deepseek",
             "api_key": os.environ["DEEPSEEK_API_KEY"],
             "model": os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
+            "base_url": os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
         }
 
     return None

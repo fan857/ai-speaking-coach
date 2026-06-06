@@ -16,7 +16,7 @@
 - 支持浏览器 SpeechSynthesis 自动朗读和重新朗读 AI 英文回复。
 - 支持 DeepSeek 真实 AI 反馈。
 - 支持可选接入阿里云百炼 Qwen3.5-Omni-Realtime 实时语音对话。
-- 沉浸对话由 Qwen3.5-Omni-Realtime 负责；逐句反馈使用 Qwen ASR 转写后由 DeepSeek 生成完整纠错评分。
+- 沉浸对话由 Qwen3.5-Omni-Realtime 负责；逐句反馈使用 Qwen Realtime 先完成语音识别和自然接话，再由 DeepSeek 生成完整纠错评分。
 - 未配置 `DEEPSEEK_API_KEY` 或真实 AI 请求失败时，自动使用本地 mock 兜底，保证 Demo 不会中断。
 
 ## 技术栈
@@ -53,6 +53,7 @@ copy backend\.env.example backend\.env
 ```text
 DEEPSEEK_API_KEY=你的 DeepSeek API Key
 DEEPSEEK_MODEL=deepseek-v4-flash
+DEEPSEEK_BASE_URL=https://api.deepseek.com
 DASHSCOPE_API_KEY=你的阿里云百炼 API Key
 DASHSCOPE_REALTIME_MODEL=qwen3.5-omni-plus-realtime
 DASHSCOPE_REALTIME_VOICE=Tina
@@ -88,8 +89,8 @@ npm run build
 
 1. 在页面顶部选择练习场景：面试、点餐或会议。
 2. 选择练习模式：逐句反馈或沉浸对话。
-3. 逐句反馈模式下，点击“录一句并识别”，Qwen ASR 会转写英文并自动生成纠错评分。
-4. 也可以直接编辑文本框内容后点击“获取完整纠错评分”。
+3. 逐句反馈模式下，点击“录一句并对话”，Qwen Realtime 会识别英文并先给出一句自然回复。
+4. 说过至少一句话后，再点击“获取完整纠错评分”生成纠错、建议和评分。
 5. 沉浸对话模式下，点击“开始 Qwen 实时语音对话”后直接用英文对话。
 6. 逐句反馈模式会展示纠错、评分和学习建议。
 7. 沉浸对话模式不会即时纠错，先保证连续英文对话体验。

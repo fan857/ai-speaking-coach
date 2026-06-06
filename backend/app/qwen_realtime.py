@@ -13,11 +13,15 @@ router = APIRouter(prefix="/api/realtime")
 
 def build_realtime_instructions(scenario_id: str, mode: str) -> str:
     scenario = SCENARIOS[scenario_id]
-    feedback_rule = (
-        "Keep the conversation flowing. Do not correct grammar during the live conversation."
-        if mode == "immersive"
-        else "Keep replies brief. Give one short correction only when it does not interrupt the flow."
-    )
+    if mode == "immersive":
+        feedback_rule = "Keep the conversation flowing. Do not correct grammar during the live conversation."
+    elif mode == "feedback":
+        feedback_rule = (
+            "Reply briefly and naturally as the practice partner. Do not give grammar corrections, "
+            "scores, or study advice; detailed feedback is generated only after the user clicks the feedback button."
+        )
+    else:
+        feedback_rule = "Only transcribe the user's speech."
 
     return "\n".join(
         [

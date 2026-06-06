@@ -115,11 +115,20 @@ def get_mock_immersive_result(scenario_id: str, transcript: str, history: list[C
     lower_text = transcript.lower()
 
     if scenario_id == "restaurant":
-        ai_reply = (
-            "Great. Would you like anything else with your order?"
-            if turn_count >= 1
-            else "Sure. Would you like that hot or iced?"
-        )
+        if any(phrase in lower_text for phrase in ["no thanks", "no thank", "don't need", "do not need", "don't ask"]):
+            ai_reply = "No problem. I have your order. Would you like to pay now?"
+        elif "egg" in lower_text:
+            ai_reply = "Sure. Would you like your eggs fried, scrambled, or boiled?"
+        elif "hawk" in lower_text:
+            ai_reply = "Sorry, did you mean another item on the menu?"
+        elif any(word in lower_text for word in ["tea", "coffee", "drink", "juice"]):
+            ai_reply = "Sure. Would you like that hot or iced?"
+        elif turn_count >= 2:
+            ai_reply = "Got it. Would you like to confirm the order now?"
+        elif turn_count >= 1:
+            ai_reply = "Great. Would you like to add a drink or a side?"
+        else:
+            ai_reply = "Sure. What would you like with that?"
     elif scenario_id == "meeting":
         ai_reply = (
             "Thanks for sharing that. What is the next step for your work?"

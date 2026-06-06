@@ -80,17 +80,18 @@ async def practice_coach(request: PracticeRequest) -> dict[str, Any]:
             }
     except Exception as error:
         print(error)
-        warning = "真实 AI 请求失败，已使用 mock 结果兜底。"
+        error_message = str(error)
+        warning = f"真实 AI 请求失败：{error_message[:180]}，已使用 mock 结果兜底。"
         tips = [
             "真实 AI 请求失败，当前使用本地兜底结果。",
-            "请检查 API Key、网络、模型配置或 LangChain 依赖。",
+            "请检查 DEEPSEEK_API_KEY、DEEPSEEK_MODEL、网络或 DeepSeek 账号额度。",
         ]
 
-        if "LangChain DeepSeek" in str(error):
-            warning = "LangChain DeepSeek 依赖未安装，已使用 mock 结果兜底。"
+        if "401" in error_message or "Unauthorized" in error_message:
+            warning = "DeepSeek API Key 无效或未授权，已使用 mock 结果兜底。"
             tips = [
-                "请先执行 npm run install:all 安装后端依赖。",
-                "安装完成后重启后端服务再测试真实 AI。",
+                "请检查 backend/.env 中的 DEEPSEEK_API_KEY。",
+                "修改 .env 后需要重启后端服务。",
             ]
 
         mock_result = get_mock_result(request, transcript)
