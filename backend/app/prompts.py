@@ -32,9 +32,14 @@ def get_feedback_prompt(scenario_id: str, transcript: str, history: list[Convers
             "3. correction.original 必须使用用户本句原文，不要编造另一句。",
             "4. correction.improved 必须给出更自然的英文表达。",
             "5. correction.reason 必须用中文解释关键问题，简洁具体。",
-            "6. scores 四项为 0 到 100 的整数，pronunciation 如果没有音素级数据，请基于文本完整度和口语自然度保守估计。",
-            "7. tips 给出 2 到 3 条中文学习建议。",
-            "8. 只输出 JSON，不要输出 Markdown。",
+            "6. issues 必须是数组，用来列出本句最值得练的 0 到 3 个结构化问题。",
+            "7. 每个 issue 包含 type、priority、original、suggestion、explanation、practiceSentence。",
+            "8. type 只能是 Grammar、Word Choice、Natural Expression、Fluency、Pronunciation Clarity 之一。",
+            "9. priority 只能是 high、medium、low。没有明显错误时 issues 返回空数组，并在 tips 里给进阶建议。",
+            "10. scores 五项为 0 到 100 的整数，pronunciation 如果没有音素级数据，请基于文本完整度和口语自然度保守估计。",
+            "11. tips 给出 2 到 3 条中文学习建议。",
+            "12. JSON 形状：{\"aiReply\":\"English reply\",\"correction\":{\"original\":\"user sentence\",\"improved\":\"better sentence\",\"reason\":\"Chinese reason\"},\"issues\":[{\"type\":\"Grammar\",\"priority\":\"high\",\"original\":\"problem phrase\",\"suggestion\":\"better phrase\",\"explanation\":\"Chinese explanation\",\"practiceSentence\":\"English sentence to repeat\"}],\"scores\":{\"fluency\":80,\"pronunciation\":78,\"grammar\":76,\"naturalness\":82,\"taskCompletion\":84},\"tips\":[\"Chinese tip\"]}",
+            "13. 只输出 JSON，不要输出 Markdown。",
         ]
     )
 
@@ -71,6 +76,19 @@ def get_coach_prompt(
         return get_immersive_prompt(scenario_id, transcript, history)
 
     return get_feedback_prompt(scenario_id, transcript, history)
+
+
+def get_translation_prompt(text: str) -> str:
+    return "\n".join(
+        [
+            "You are a concise English-to-Chinese translator for an English speaking practice app.",
+            "Translate the following English message into natural Simplified Chinese.",
+            "Keep the translation faithful and easy for a beginner to understand.",
+            "Return JSON only with this shape:",
+            '{"translation":"Chinese translation"}',
+            f"English message: {text}",
+        ]
+    )
 
 
 def get_summary_prompt(scenario_id: str, history: list[ConversationMessage], mode: str = "immersive") -> str:

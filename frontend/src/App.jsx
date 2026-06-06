@@ -50,6 +50,20 @@ const scoreLabels = {
 
 const SUMMARY_HISTORY_KEY = "qiniu-speaking-summary-history-v1";
 
+const issueTypeLabels = {
+  Grammar: "语法",
+  "Word Choice": "用词",
+  "Natural Expression": "自然表达",
+  Fluency: "流畅度",
+  "Pronunciation Clarity": "识别清晰度"
+};
+
+const issuePriorityLabels = {
+  high: "优先修正",
+  medium: "建议优化",
+  low: "进阶打磨"
+};
+
 function getSpeechRecognitionConstructor() {
   return window.SpeechRecognition || window.webkitSpeechRecognition;
 }
@@ -144,6 +158,22 @@ async function requestPracticeSummary(payload) {
     return await fetch("/api/practice/summary", requestOptions);
   } catch {
     return fetch("http://localhost:3001/api/practice/summary", requestOptions);
+  }
+}
+
+async function requestTranslation(payload) {
+  const requestOptions = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  };
+
+  try {
+    return await fetch("/api/practice/translate", requestOptions);
+  } catch {
+    return fetch("http://localhost:3001/api/practice/translate", requestOptions);
   }
 }
 
@@ -260,6 +290,36 @@ function ScoreBar({ label, reason, value }) {
   );
 }
 
+function IssueCard({ issue }) {
+  const priority = issue.priority || "medium";
+  return (
+    <article className="issue-card">
+      <div className="issue-header">
+        <span>{issueTypeLabels[issue.type] || issue.type || "表达问题"}</span>
+        <strong className={`priority-badge ${priority}`}>{issuePriorityLabels[priority] || priority}</strong>
+      </div>
+      <div className="issue-body">
+        <div>
+          <span>问题片段</span>
+          <p>{issue.original}</p>
+        </div>
+        <div>
+          <span>推荐表达</span>
+          <p>{issue.suggestion}</p>
+        </div>
+        <div>
+          <span>中文解释</span>
+          <p>{issue.explanation}</p>
+        </div>
+        <div>
+          <span>跟读练习</span>
+          <p>{issue.practiceSentence}</p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function calculateAverageScore(scores) {
   const values = Object.values(scores || {}).map((value) => Number(value)).filter((value) => Number.isFinite(value));
   if (!values.length) {
@@ -307,6 +367,8 @@ function App() {
   const [practiceResult, setPracticeResult] = useState(null);
   const [summaryResult, setSummaryResult] = useState(null);
   const [summaryHistory, setSummaryHistory] = useState(loadSummaryHistory);
+  const [messageTranslations, setMessageTranslations] = useState({});
+  const [translatingMessageId, setTranslatingMessageId] = useState("");
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedbackCandidate, setFeedbackCandidate] = useState(null);
@@ -474,6 +536,8 @@ function App() {
     setIsStreamingReply(false);
     setStreamedReply("");
     setQuickReplySource("");
+    setMessageTranslations({});
+    setTranslatingMessageId("");
     setFirstSentenceLatency(null);
     setRealtimeTranscript("");
     setRealtimeReply("");
@@ -591,6 +655,37 @@ function App() {
 
   function handleReplayAiReply(text) {
     speakAiReply(text);
+  }
+
+  async function handleTranslateMessage(messageId, text) {
+    if (messageTranslations[messageId]) {
+      setMessageTranslations((translations) => {
+        const nextTranslations = { ...translations };
+        delete nextTranslations[messageId];
+        return nextTranslations;
+      });
+      return;
+    }
+
+    setTranslatingMessageId(messageId);
+    try {
+      const response = await requestTranslation({ text });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || data.message || "翻译失败，请稍后重试。");
+      }
+      setMessageTranslations((translations) => ({
+        ...translations,
+        [messageId]: data.translation
+      }));
+    } catch (error) {
+      setMessageTranslations((translations) => ({
+        ...translations,
+        [messageId]: error.message || "翻译失败，请确认后端服务和 DeepSeek Key。"
+      }));
+    } finally {
+      setTranslatingMessageId("");
+    }
   }
 
   async function handleRecordClick() {
@@ -975,11 +1070,13 @@ function App() {
           improved: trimmedInput,
           reason: "低延迟流式模式优先返回 AI 口语回应，本轮详细纠错可继续使用完整反馈按钮。"
         },
+        issues: currentResult?.issues || [],
         scores: currentResult?.scores || {
           fluency: 0,
           pronunciation: 0,
           grammar: 0,
-          naturalness: 0
+          naturalness: 0,
+          taskCompletion: 0
         },
         tips: currentResult?.tips || ["低延迟模式用于降低首句等待时间，完整评分请使用原反馈流程。"],
         source: data.source
@@ -1521,11 +1618,23 @@ function App() {
             <div className="message ai-message">
               <div className="message-header">
                 <span>AI</span>
-                <button className="replay-button" onClick={() => handleReplayAiReply(selectedScenario.prompt)} type="button">
-                  重读
-                </button>
+                <div className="message-actions">
+                  <button className="replay-button" onClick={() => handleReplayAiReply(selectedScenario.prompt)} type="button">
+                    重读
+                  </button>
+                  <button
+                    className="replay-button"
+                    onClick={() => handleTranslateMessage(`prompt-${selectedScenarioId}`, selectedScenario.prompt)}
+                    type="button"
+                  >
+                    {translatingMessageId === `prompt-${selectedScenarioId}` ? "翻译中" : "翻译"}
+                  </button>
+                </div>
               </div>
               <p>{selectedScenario.prompt}</p>
+              {messageTranslations[`prompt-${selectedScenarioId}`] && (
+                <p className="translation-text">{messageTranslations[`prompt-${selectedScenarioId}`]}</p>
+              )}
             </div>
 
             {conversationMessages.length ? (
@@ -1536,17 +1645,27 @@ function App() {
                 >
                   <div className="message-header">
                     <span>{message.role === "user" ? "You" : "AI"}</span>
-                    {message.role === "assistant" && (
+                    <div className="message-actions">
+                      {message.role === "assistant" && (
+                        <button
+                          className="replay-button"
+                          onClick={() => handleReplayAiReply(message.content)}
+                          type="button"
+                        >
+                          重读
+                        </button>
+                      )}
                       <button
                         className="replay-button"
-                        onClick={() => handleReplayAiReply(message.content)}
+                        onClick={() => handleTranslateMessage(message.id, message.content)}
                         type="button"
                       >
-                        重读
+                        {translatingMessageId === message.id ? "翻译中" : messageTranslations[message.id] ? "收起译文" : "翻译"}
                       </button>
-                    )}
+                    </div>
                   </div>
                   <p>{message.content}</p>
+                  {messageTranslations[message.id] && <p className="translation-text">{messageTranslations[message.id]}</p>}
                 </div>
               ))
             ) : (
@@ -1561,7 +1680,7 @@ function App() {
 
             {!isImmersiveMode ? (
               <>
-                <div className="input-panel">
+                <div className={practiceResult ? "input-panel compact-input-panel" : "input-panel"}>
                 <button
                   className={isQwenAsrActive ? "record-button recording" : "record-button"}
                   onClick={handleQwenSentencePracticeClick}
@@ -1569,13 +1688,13 @@ function App() {
                   aria-label={isQwenAsrActive ? "停止单句对话" : "录一句并对话"}
                 >
                   <span className="record-dot" />
-                  {isQwenAsrActive ? "停止对话" : "录一句并对话"}
+                  {isQwenAsrActive ? "停止对话" : practiceResult ? "继续下一句" : "录一句并对话"}
                 </button>
                 <textarea
                   disabled={isConversationEnded}
                   onChange={(event) => setUserInput(event.target.value)}
                   placeholder={selectedScenario.placeholder}
-                  rows={4}
+                  rows={practiceResult ? 2 : 4}
                   value={userInput}
                 />
               </div>
@@ -1585,7 +1704,7 @@ function App() {
                 onClick={handleFeedbackSubmit}
                 type="button"
               >
-                {isSubmitting ? "生成纠错评分中..." : "获取完整纠错评分"}
+                {isSubmitting ? "生成纠错评分中..." : practiceResult ? "纠错评分已生成" : "获取完整纠错评分"}
               </button>
               </>
             ) : (
@@ -1757,22 +1876,36 @@ function App() {
             ) : (
               <>
                 <section className="feedback-card">
-                  <p className="section-label">纠错反馈</p>
+                  <div className="feedback-title-row">
+                    <p className="section-label">结构化纠错</p>
+                    {practiceResult?.issues?.length ? <span className="source-tag">{practiceResult.issues.length} 项</span> : null}
+                  </div>
                   {practiceResult ? (
-                    <div className="correction">
-                      <div>
-                        <span>原句</span>
-                        <p>{practiceResult.correction.original}</p>
+                    <>
+                      {practiceResult.issues?.length ? (
+                        <div className="issue-list">
+                          {practiceResult.issues.map((issue, index) => (
+                            <IssueCard issue={issue} key={`${issue.type}-${index}`} />
+                          ))}
+                        </div>
+                      ) : (
+                        <p>本句没有明显错误，可以继续练习更具体、更自然的表达。</p>
+                      )}
+                      <div className="correction">
+                        <div>
+                          <span>原句</span>
+                          <p>{practiceResult.correction.original}</p>
+                        </div>
+                        <div>
+                          <span>总体改写</span>
+                          <p>{practiceResult.correction.improved}</p>
+                        </div>
+                        <div>
+                          <span>总体原因</span>
+                          <p>{practiceResult.correction.reason}</p>
+                        </div>
                       </div>
-                      <div>
-                        <span>更自然表达</span>
-                        <p>{practiceResult.correction.improved}</p>
-                      </div>
-                      <div>
-                        <span>原因</span>
-                        <p>{practiceResult.correction.reason}</p>
-                      </div>
-                    </div>
+                    </>
                   ) : (
                     <p>语法和表达建议会展示在这里。</p>
                   )}

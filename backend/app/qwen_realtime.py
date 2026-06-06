@@ -41,6 +41,27 @@ def should_create_realtime_response(mode: str) -> bool:
     return mode != "asr"
 
 
+def get_turn_detection_config(mode: str, create_response: bool) -> dict[str, object]:
+    if mode == "feedback":
+        return {
+            "type": "server_vad",
+            "threshold": 0.45,
+            "prefix_padding_ms": 500,
+            "silence_duration_ms": 1200,
+            "create_response": create_response,
+            "interrupt_response": True,
+        }
+
+    return {
+        "type": "server_vad",
+        "threshold": 0.5,
+        "prefix_padding_ms": 300,
+        "silence_duration_ms": 650,
+        "create_response": create_response,
+        "interrupt_response": True,
+    }
+
+
 async def connect_dashscope_realtime(model: str, api_key: str):
     import websockets
 
@@ -100,14 +121,7 @@ async def qwen_realtime_proxy(websocket: WebSocket) -> None:
                 "input_audio_transcription": {
                     "model": "qwen3-asr-flash-realtime",
                 },
-                "turn_detection": {
-                    "type": "server_vad",
-                    "threshold": 0.5,
-                    "prefix_padding_ms": 300,
-                    "silence_duration_ms": 650,
-                    "create_response": create_response,
-                    "interrupt_response": True,
-                },
+                "turn_detection": get_turn_detection_config(mode, create_response),
             },
         }
         await dashscope.send(json.dumps(session_update, ensure_ascii=False))

@@ -19,3 +19,7 @@ class SummaryRequest(BaseModel):
     scenarioId: str
     mode: Literal["feedback", "immersive"] = "immersive"
     history: list[ConversationMessage] = Field(default_factory=list)
+
+
+class TranslationRequest(BaseModel):
+    text: str
