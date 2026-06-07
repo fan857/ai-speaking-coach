@@ -1176,10 +1176,24 @@ textarea:disabled {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .shadowing-reference-card,
 .shadowing-record-area,
+.shadowing-result-area {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+}
+.shadowing-reference-card,
+.shadowing-record-area {
+  flex-shrink: 0;
+}
+
 .shadowing-result-area {
   background: #fff;
   border: 1px solid #e2e8f0;
