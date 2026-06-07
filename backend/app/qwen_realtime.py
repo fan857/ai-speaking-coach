@@ -1,6 +1,9 @@
 import asyncio
+import base64
+import contextlib
 import json
 import os
+import uuid
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -73,6 +76,56 @@ async def connect_dashscope_realtime(model: str, api_key: str):
         return await websockets.connect(url, additional_headers=headers)
     except TypeError:
         return await websockets.connect(url, extra_headers=headers)
+
+
+async def connect_dashscope_asr(api_key: str):
+    import websockets
+
+    url = os.getenv("DASHSCOPE_ASR_WS_URL", "wss://dashscope.aliyuncs.com/api-ws/v1/inference/")
+    headers = {"Authorization": f"Bearer {api_key}"}
+    try:
+        return await websockets.connect(url, additional_headers=headers)
+    except TypeError:
+        return await websockets.connect(url, extra_headers=headers)
+
+
+def build_paraformer_run_task(task_id: str) -> dict[str, object]:
+    return {
+        "header": {
+            "action": "run-task",
+            "task_id": task_id,
+            "streaming": "duplex",
+        },
+        "payload": {
+            "task_group": "audio",
+            "task": "asr",
+            "function": "recognition",
+            "model": os.getenv("DASHSCOPE_ASR_MODEL", "paraformer-realtime-v2"),
+            "parameters": {
+                "format": "pcm",
+                "sample_rate": 16000,
+                "language_hints": ["en"],
+                "disfluency_removal_enabled": False,
+                "semantic_punctuation_enabled": True,
+                "punctuation_prediction_enabled": True,
+                "heartbeat": True,
+            },
+            "input": {},
+        },
+    }
+
+
+def build_paraformer_finish_task(task_id: str) -> dict[str, object]:
+    return {
+        "header": {
+            "action": "finish-task",
+            "task_id": task_id,
+            "streaming": "duplex",
+        },
+        "payload": {
+            "input": {},
+        },
+    }
 
 
 @router.get("/qwen/status")

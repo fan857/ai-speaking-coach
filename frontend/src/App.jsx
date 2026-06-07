@@ -1308,8 +1308,8 @@ function App() {
     }
 
     if (event.type?.includes("input_audio_transcription") && event.delta) {
-      realtimeUserTranscriptRef.current += event.delta;
-      setRealtimeTranscript((text) => `${text}${event.delta}`);
+      realtimeUserTranscriptRef.current = event.delta;  // replace, not append (delta is growing full transcript)
+      setRealtimeTranscript(event.delta);
       return;
     }
 
@@ -1374,7 +1374,7 @@ function App() {
     }
 
     if (event.type?.includes("input_audio_transcription") && event.delta) {
-      qwenAsrTranscriptRef.current += event.delta;
+      qwenAsrTranscriptRef.current = event.delta;  // replace, not append (delta is growing full transcript)
       setUserInput(qwenAsrTranscriptRef.current);
       return;
     }
