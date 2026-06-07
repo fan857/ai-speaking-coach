@@ -31,17 +31,17 @@ const practiceModes = [
   {
     id: "feedback",
     label: "逐句反馈",
-    description: "每轮回复后立即展示纠错、评分和学习建议。"
+    description: "逐句练习"
   },
   {
     id: "immersive",
     label: "沉浸对话",
-    description: "AI 全程只用英文对话，结束后再统一总结。"
+    description: "连续对话"
   },
   {
     id: "shadowing",
     label: "跟读模仿",
-    description: "朗读示例英文句子，AI 评估发音准确性并给出逐词对比反馈。"
+    description: "发音跟读"
   }
 ];
 
@@ -54,6 +54,7 @@ const scoreLabels = {
 };
 
 const SUMMARY_HISTORY_KEY = "qiniu-speaking-summary-history-v1";
+const HISTORY_LIMIT_PER_MODE = 5;
 
 const issueTypeLabels = {
   Grammar: "语法",
@@ -68,8 +69,6 @@ const issuePriorityLabels = {
   medium: "建议优化",
   low: "进阶打磨"
 };
-
-const requirementTags = ["实时语音对话", "场景化训练", "语法纠错", "发音可懂度评估", "课后总结", "量化反馈"];
 
 const scoreReasonFallbacks = {
   fluency: "句子是否连贯、是否有明显停顿。",
@@ -254,18 +253,6 @@ function mergeInstantAck(localAck, reply) {
   return `${localAck} ${cleanedReply}`.trim();
 }
 
-function getFeedbackSourceLabel(result) {
-  if (!result) {
-    return "提交后会显示反馈来源。";
-  }
-
-  if (result.source === "deepseek") {
-    return `DeepSeek 真实 AI 反馈${result.model ? `：${result.model}` : ""}`;
-  }
-
-  return "本地兜底反馈";
-}
-
 function getReplySourceLabel(source) {
   if (!source) {
     return "等待回复来源";
@@ -351,10 +338,19 @@ function calculateAverageScore(scores) {
 function loadSummaryHistory() {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(SUMMARY_HISTORY_KEY) || "[]");
-    return Array.isArray(parsed) ? parsed.slice(0, 5) : [];
+    return Array.isArray(parsed) ? trimHistoryByMode(parsed) : [];
   } catch {
     return [];
   }
+}
+
+function trimHistoryByMode(history) {
+  const modeCounts = {};
+  return history.filter((entry) => {
+    const mode = entry.mode || "feedback";
+    modeCounts[mode] = (modeCounts[mode] || 0) + 1;
+    return modeCounts[mode] <= HISTORY_LIMIT_PER_MODE;
+  });
 }
 
 function getTrendText(history) {
@@ -362,20 +358,22 @@ function getTrendText(history) {
     return "这是本机记录的第一份训练报告。";
   }
 
+  const getHistoryScore = (entry) => entry.averageScore ?? entry.accuracyScore ?? 0;
+
   if (history.length === 1) {
-    return `本次综合均分 ${history[0].averageScore}，继续完成下一轮后会显示趋势。`;
+    return `本次得分 ${getHistoryScore(history[0])}，继续完成下一轮后会显示趋势。`;
   }
 
-  const current = history[0].averageScore;
-  const previous = history[1].averageScore;
+  const current = getHistoryScore(history[0]);
+  const previous = getHistoryScore(history[1]);
   const delta = current - previous;
   if (delta > 0) {
-    return `本次综合均分 ${current}，比上次提高 ${delta} 分。`;
+    return `本次得分 ${current}，比上次提高 ${delta} 分。`;
   }
   if (delta < 0) {
-    return `本次综合均分 ${current}，比上次低 ${Math.abs(delta)} 分，建议复练薄弱项。`;
+    return `本次得分 ${current}，比上次低 ${Math.abs(delta)} 分，建议复练薄弱项。`;
   }
-  return `本次综合均分 ${current}，与上次持平。`;
+  return `本次得分 ${current}，与上次持平。`;
 }
 
 function getLatestUserText(messages) {
@@ -510,7 +508,7 @@ function App() {
 
   async function handleShadowingSubmit() { if(!shadowingReference||!shadowingAudioUrl)return; var transcript=shadowingTranscript.trim()||""; if(!transcript||transcript.startsWith("(")){ setShadowingTranscript("(请先完成录音并等待识别结果)"); return; } setIsShadowingSubmitting(true); try{var res=await fetch("/api/pronunciation/imitate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scenarioId:selectedScenarioId,referenceText:shadowingReference,transcript:transcript})});if(!res.ok)throw new Error("API error");var data=await res.json();setShadowingResult(data);saveSessionRecord(data)}catch(err){console.error(err)}finally{setIsShadowingSubmitting(false)} }
 
-  function saveSessionRecord(data) { var e={scenarioId:selectedScenarioId,mode:practiceMode,timestamp:Date.now()}; if(data&&data.scores){e.averageScore=calculateAverageScore(data.scores);e.scores=data.scores} if(data&&data.accuracyScore!==undefined)e.accuracyScore=data.accuracyScore; if(data&&(data.summary||data.encouragement))e.summary=data.summary||data.encouragement||""; var nh=[e].concat(summaryHistory).slice(0,10);setSummaryHistory(nh);try{window.localStorage.setItem(SUMMARY_HISTORY_KEY,JSON.stringify(nh))}catch(err){} }
+  function saveSessionRecord(data) { var e={scenarioId:selectedScenarioId,mode:practiceMode,timestamp:Date.now()}; if(data&&data.scores){e.averageScore=calculateAverageScore(data.scores);e.scores=data.scores} if(data&&data.accuracyScore!==undefined)e.accuracyScore=data.accuracyScore; if(data&&(data.summary||data.encouragement))e.summary=data.summary||data.encouragement||""; var nh=trimHistoryByMode([e].concat(summaryHistory));setSummaryHistory(nh);try{window.localStorage.setItem(SUMMARY_HISTORY_KEY,JSON.stringify(nh))}catch(err){} }
   const displayAiReply = useMemo(() => {
     const latestAssistantMessage = [...conversationMessages].reverse().find((message) => message.role === "assistant");
     return latestAssistantMessage?.content || realtimeReply || practiceResult?.aiReply || "";
@@ -578,6 +576,25 @@ function App() {
       source: summaryResult?.source
     };
   }, [conversationMessages, practiceResult, selectedScenario, summaryResult, userTurnCount]);
+  const currentModeHistory = useMemo(
+    () => summaryHistory.filter((entry) => entry.mode === practiceMode),
+    [practiceMode, summaryHistory]
+  );
+  const hasCurrentFeedbackContent =
+    Boolean(practiceResult) ||
+    Boolean(summaryResult) ||
+    isSummarizing;
+  const feedbackPanelTitle =
+    summaryResult || isSummarizing
+      ? "本轮练习结果"
+      : practiceResult
+        ? "本句纠错结果"
+      : isImmersiveMode
+        ? "等待课后报告"
+        : "等待练习反馈";
+  const feedbackEmptyText = isImmersiveMode
+    ? "结束对话并生成课后报告后，这里会显示总结。"
+    : "完成一句练习后，这里会显示反馈。";
   const recordButtonLabel = isQwenAsrActive
     ? "正在识别"
     : isSubmitting
@@ -616,7 +633,7 @@ function App() {
       averageScore: calculateAverageScore(result.scores),
       scores: result.scores
     };
-    const nextHistory = [entry, ...summaryHistory].slice(0, 5);
+    const nextHistory = trimHistoryByMode([entry, ...summaryHistory]);
     setSummaryHistory(nextHistory);
     window.localStorage.setItem(SUMMARY_HISTORY_KEY, JSON.stringify(nextHistory));
   }
@@ -1066,7 +1083,7 @@ function App() {
               quickReplyText = `${quickReplyText}${quickReplyText ? " " : ""}${data.text}`.trim();
               setStreamedReply(quickReplyText);
               setStreamStatus(
-                `${isFallbackReplySource(data.source || replySource) ? "兜底回复已先返回。" : "AI 已先回复。"}你可以点击按钮获取这句话的完整纠错评分。`
+                `${isFallbackReplySource(data.source || replySource) ? "兜底回复已先返回。" : "AI 已先回复。"}你可以点击按钮查看本句纠错。`
               );
               return;
             }
@@ -1108,13 +1125,13 @@ function App() {
     event.preventDefault();
 
     if (!feedbackCandidate) {
-      setErrorMessage("请先说一句英文，再获取纠错评分。");
+      setErrorMessage("请先说一句英文，再查看本句纠错。");
       return;
     }
 
     setIsSubmitting(true);
     setErrorMessage("");
-    setStreamStatus("正在生成完整纠错评分。");
+    setStreamStatus("正在生成本句纠错评分。");
 
     try {
       const response = await requestCoachPractice({
@@ -1131,7 +1148,7 @@ function App() {
 
       setPracticeResult(data);
       setFeedbackCandidate(null);
-      setStreamStatus("完整纠错评分已生成。");
+      setStreamStatus("本句纠错评分已生成。");
     } catch (error) {
       setErrorMessage(
         error.message === "Failed to fetch"
@@ -1489,7 +1506,7 @@ function App() {
     if ((event.type === "response.audio_transcript.delta" || event.type === "response.text.delta") && event.delta) {
       qwenSentenceReplyRef.current += event.delta;
       setStreamedReply(qwenSentenceReplyRef.current);
-      setStreamStatus("Qwen Realtime 已先回复。你可以点击按钮获取这句话的完整纠错评分。");
+      setStreamStatus("Qwen Realtime 已先回复。你可以点击按钮查看本句纠错。");
       return;
     }
 
@@ -1729,83 +1746,57 @@ function App() {
             <h1>AI 英语口语陪练</h1>
             <p className="product-slogan">通过真实场景多轮对话，训练英语表达、发音清晰度和自然交流能力。</p>
           </div>
-          <div className="status-pill">{selectedMode.label}</div>
         </header>
 
-        <section className="product-overview" aria-label="当前训练状态">
-          <div className="training-status-card">
+        <section className="practice-command-card" aria-label="练习控制台">
+          <div className="command-current">
+            <p className="section-label">当前练习</p>
+            <h2>{selectedScenario.title}</h2>
+            <span>{selectedMode.label}</span>
+          </div>
+
+          <div className="command-metrics" aria-label="训练状态">
             <div>
-              <span>当前场景</span>
-              <strong>{selectedScenario.title}</strong>
-            </div>
-            <div>
-              <span>当前模式</span>
-              <strong>{selectedMode.label}</strong>
-            </div>
-            <div>
-              <span>对话轮数</span>
+              <span>轮数</span>
               <strong>{userTurnCount}</strong>
             </div>
             <div>
-              <span>AI 状态</span>
+              <span>状态</span>
               <strong>{aiStatus}</strong>
             </div>
           </div>
-          <div className="requirement-tags" aria-label="题目要求命中点">
-            {requirementTags.map((tag) => (
-              <span key={tag}>{tag}</span>
-            ))}
-          </div>
-        </section>
 
-        <section className="scenario-panel" aria-labelledby="scenario-title">
-          <div>
-            <p className="section-label" id="scenario-title">
-              练习场景
-            </p>
-            <h2>{selectedScenario.title}</h2>
-            <p className="muted">
-              {isImmersiveMode
-                ? `与${selectedScenario.role}进行全英文沉浸对话。AI 不会打断纠错，先保证对话节奏。`
-                : `与${selectedScenario.role}进行多轮英语口语对话。AI 会回复、朗读并给出即时反馈。`}
-            </p>
-          </div>
-          <div className="scenario-tabs" role="tablist" aria-label="练习场景">
-            {scenarios.map((scenario) => (
-              <button
-                className={scenario.id === selectedScenarioId ? "active" : ""}
-                key={scenario.id}
-                onClick={() => handleScenarioChange(scenario.id)}
-                type="button"
-              >
-                {scenario.label}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="mode-panel" aria-labelledby="mode-title">
-          <div>
-            <p className="section-label" id="mode-title">
-              练习模式
-            </p>
-            <p>{selectedMode.description}</p>
-            <div className="mode-explainer">
-              <span>逐句反馈：适合纠错训练，每轮后主动查看评分和建议。</span>
-              <span>沉浸式对话：适合模拟真实交流，对话中不打断，结束后统一总结。</span>
+          <div className="command-controls">
+            <div className="control-row">
+              <span>场景</span>
+              <div className="scenario-tabs" role="tablist" aria-label="练习场景">
+                {scenarios.map((scenario) => (
+                  <button
+                    className={scenario.id === selectedScenarioId ? "active" : ""}
+                    key={scenario.id}
+                    onClick={() => handleScenarioChange(scenario.id)}
+                    type="button"
+                  >
+                    {scenario.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-          <div className="mode-tabs" role="tablist" aria-label="练习模式">
-            {practiceModes.map((mode) => (
-              <button
-                className={mode.id === practiceMode ? "active" : ""}
-                key={mode.id}
-                onClick={() => handleModeChange(mode.id)}
-                type="button"
-              >
-                {mode.label}
-              </button>
-            ))}
+            <div className="control-row">
+              <span>模式</span>
+              <div className="mode-tabs" role="tablist" aria-label="练习模式">
+                {practiceModes.map((mode) => (
+                  <button
+                    className={mode.id === practiceMode ? "active" : ""}
+                    key={mode.id}
+                    onClick={() => handleModeChange(mode.id)}
+                    type="button"
+                  >
+                    {mode.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -1926,7 +1917,10 @@ function App() {
                 </div>
               ))
             ) : (
-              <div className="empty-state">在下方输入一句英文，或使用语音识别自动生成文本。</div>
+              <div className="empty-state">
+                <strong>暂无对话信息</strong>
+                <span>开始说话后，对话会显示在这里。</span>
+              </div>
             )}
 
             {isConversationEnded && (
@@ -1961,7 +1955,7 @@ function App() {
                 onClick={handleFeedbackSubmit}
                 type="button"
               >
-                {isSubmitting ? "生成纠错评分中..." : practiceResult ? "纠错评分已生成" : "获取完整纠错评分"}
+                {isSubmitting ? "生成本句纠错中..." : practiceResult ? "本句纠错已生成" : "查看本句纠错"}
               </button>
               </>
             ) : null}
@@ -2001,48 +1995,20 @@ function App() {
             {errorMessage && <p className="error-text">{errorMessage}</p>}
           </div>
 
-          <aside className="feedback-stack">
+          <aside className={hasCurrentFeedbackContent ? "feedback-stack" : "feedback-stack feedback-stack-empty"}>
             <div className="feedback-center-header">
-              <p className="section-label">训练反馈中心</p>
-              <h2>当前句反馈、能力评分与课后总结</h2>
+              <p className="section-label">反馈面板</p>
+              <h2>{feedbackPanelTitle}</h2>
             </div>
 
-            <div className="feedback-section-heading">
-              <span>训练状态</span>
-              <p>展示纠错时机、反馈来源和语音播放状态。</p>
-            </div>
+            {!hasCurrentFeedbackContent && (
+              <div className="feedback-empty-state">
+                <strong>暂无反馈信息</strong>
+                <span>{feedbackEmptyText}</span>
+              </div>
+            )}
 
-            <section className="feedback-card">
-              <p className="section-label">当前模式</p>
-              <p>{selectedMode.label}</p>
-              <p className="muted-card">{selectedMode.description}</p>
-            </section>
-
-            <section className="feedback-card">
-              <p className="section-label">反馈来源</p>
-              <p>
-                {practiceResult
-                  ? getFeedbackSourceLabel(practiceResult)
-                  : isImmersiveMode
-                    ? "沉浸式对话由 Qwen3.5-Omni-Realtime 负责；结束后生成课后总结。"
-                    : `逐句反馈由 Qwen Realtime 识别并先回复；当前回复来源：${getReplySourceLabel(quickReplySource)}。纠错评分点击后由 DeepSeek 生成。`}
-              </p>
-              {!isImmersiveMode && isFallbackReplySource(quickReplySource) && (
-                <p className="warning-text">当前快速回复使用本地兜底，不是模型真实回复。请检查 DeepSeek Key、网络或后端日志。</p>
-              )}
-              {practiceResult?.warning && <p className="warning-text">{practiceResult.warning}</p>}
-            </section>
-
-            <section className="feedback-card">
-              <p className="section-label">AI 英文朗读</p>
-              <p>{speechStatus}</p>
-            </section>
-
-            <div className="feedback-section-heading">
-              <span>课后总结</span>
-              <p>结束训练后生成正式报告；数据不足时会基于已完成对话给出兜底报告。</p>
-            </div>
-
+            {(summaryResult || isSummarizing) && (
             <section className="feedback-card summary-card">
               <div className="feedback-title-row">
                 <p className="section-label">课后总结</p>
@@ -2050,7 +2016,7 @@ function App() {
               </div>
               {isSummarizing ? (
                 <p>正在根据全程对话生成总结...</p>
-              ) : userTurnCount || summaryResult ? (
+              ) : (
                 <>
                   <div className="report-kpis">
                     <div>
@@ -2098,134 +2064,91 @@ function App() {
                       </ul>
                     </div>
                   </div>
-            <section className="feedback-card" style={{marginTop: 12}}>
-              <p className="section-label">学习记录</p>
-              {summaryHistory.length === 0 ? (
-                <p className="muted-card">尚无记录</p>
-              ) : (
+                  {summaryResult?.scoreBasis && <p className="score-basis">{summaryResult.scoreBasis}</p>}
+                </>
+              )}
+            </section>
+            )}
+
+            {currentModeHistory.length > 0 && (
+              <section className="feedback-card">
+                <p className="section-label">{selectedMode.label}记录</p>
                 <div className="score-chart">
-                  {summaryHistory.slice(0, 8).map((entry, i) => {
+                  {currentModeHistory.slice(0, HISTORY_LIMIT_PER_MODE).map((entry, i) => {
                     const score = entry.averageScore ?? entry.accuracyScore ?? 0;
-                    const ml = entry.mode === "shadowing" ? "跟读" : entry.mode === "immersive" ? "沉浸" : "反馈";
                     const bc = score >= 80 ? "bar-good" : score >= 60 ? "bar-ok" : "bar-low";
                     return (
                       <div key={i} className="chart-row">
-                        <span className="chart-label">{ml}</span>
+                        <span className="chart-label">#{currentModeHistory.length - i}</span>
                         <div className="chart-bar-track"><div className={"chart-bar " + bc} style={{ width: score + "%" }} /></div>
                         <span className="chart-score">{score}{entry.averageScore !== undefined ? "分" : "%"}</span>
                       </div>
                     );
                   })}
                 </div>
-              )}
-              <p className="section-label">趋势</p>
-              <p>{getTrendText(summaryHistory)}</p>
-            </section>
-                  {summaryResult?.scoreBasis && <p className="score-basis">{summaryResult.scoreBasis}</p>}
-                </>
-              ) : (
-                <p>结束对话后，这里会生成全程表现总结、评分依据、薄弱点和下一步训练建议。</p>
-              )}
-            </section>
-
-            <div className="feedback-section-heading">
-              <span>当前句反馈</span>
-              <p>逐句模式下，先保证 AI 接话流畅，再按需生成详细纠错。</p>
-            </div>
-
-            <section className="feedback-card">
-              <div className="feedback-title-row">
-                <p className="section-label">AI 回复</p>
-                {displayAiReply && (
-                  <button
-                    className="replay-button"
-                    onClick={() => handleReplayAiReply(displayAiReply)}
-                    type="button"
-                  >
-                    重听 AI 回复
-                  </button>
-                )}
-              </div>
-              <p>{displayAiReply || "开始对话后，这里会同步展示最近一条 AI 回复。"}</p>
-            </section>
-
-            {isImmersiveMode ? (
-              <section className="feedback-card">
-                <p className="section-label">沉浸对话说明</p>
-                <p>当前模式不进行即时纠错和评分，先保证英语对话流畅。点击“结束对话并生成课后报告”后，会基于全程对话生成课后总结、薄弱点和训练重点。</p>
+                <p className="trend-text">{getTrendText(currentModeHistory)}</p>
               </section>
-            ) : (
+            )}
+
+            {!isImmersiveMode && practiceResult && (
               <>
                 <section className="feedback-card">
                   <div className="feedback-title-row">
                     <p className="section-label">结构化纠错</p>
                     {practiceResult?.issues?.length ? <span className="source-tag">{practiceResult.issues.length} 项</span> : null}
                   </div>
-                  {practiceResult ? (
-                    <>
-                      {practiceResult.issues?.length ? (
-                        <div className="issue-list">
-                          {practiceResult.issues.map((issue, index) => (
-                            <IssueCard issue={issue} key={`${issue.type}-${index}`} />
-                          ))}
-                        </div>
-                      ) : (
-                        <p>本句没有明显错误，可以继续练习更具体、更自然的表达。</p>
-                      )}
-                      <div className="correction">
-                        <div>
-                          <span>原句</span>
-                          <p>{practiceResult.correction.original}</p>
-                        </div>
-                        <div>
-                          <span>总体改写</span>
-                          <p>{practiceResult.correction.improved}</p>
-                        </div>
-                        <div>
-                          <span>总体原因</span>
-                          <p>{practiceResult.correction.reason}</p>
-                        </div>
-                      </div>
-                    </>
+                  {practiceResult.issues?.length ? (
+                    <div className="issue-list">
+                      {practiceResult.issues.map((issue, index) => (
+                        <IssueCard issue={issue} key={`${issue.type}-${index}`} />
+                      ))}
+                    </div>
                   ) : (
-                    <p>语法和表达建议会展示在这里。</p>
+                    <p>本句没有明显错误，可以继续练习更具体、更自然的表达。</p>
                   )}
+                  <div className="correction">
+                    <div>
+                      <span>原句</span>
+                      <p>{practiceResult.correction.original}</p>
+                    </div>
+                    <div>
+                      <span>总体改写</span>
+                      <p>{practiceResult.correction.improved}</p>
+                    </div>
+                    <div>
+                      <span>总体原因</span>
+                      <p>{practiceResult.correction.reason}</p>
+                    </div>
+                  </div>
                 </section>
 
+                {practiceResult.tips?.length ? (
                 <section className="feedback-card">
                   <p className="section-label">学习建议</p>
-                  {practiceResult?.tips?.length ? (
-                    <ul className="tips-list">
-                      {practiceResult.tips.map((tip) => (
-                        <li key={tip}>{tip}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p>提交后会生成针对本轮表达的学习建议。</p>
-                  )}
+                  <ul className="tips-list">
+                    {practiceResult.tips.map((tip) => (
+                      <li key={tip}>{tip}</li>
+                    ))}
+                  </ul>
                 </section>
+                ) : null}
 
                 <div className="feedback-section-heading">
                   <span>能力评分</span>
-                  <p>五维评分用于量化本轮口语表现，发音项为 MVP 级可懂度估算。</p>
                 </div>
 
                 <section className="feedback-card">
                   <p className="section-label">评分面板</p>
-                  {practiceResult ? (
-                    <div className="score-list">
-                      {Object.entries(practiceResult.scores).map(([key, value]) => (
-                        <ScoreBar
-                          key={key}
-                          label={scoreLabels[key] || key}
-                          reason={practiceResult.scoreReasons?.[key] || scoreReasonFallbacks[key]}
-                          value={value}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <p>表达流畅度、识别清晰度、语法、表达自然度评分会展示在这里。</p>
-                  )}
+                  <div className="score-list">
+                    {Object.entries(practiceResult.scores).map(([key, value]) => (
+                      <ScoreBar
+                        key={key}
+                        label={scoreLabels[key] || key}
+                        reason={practiceResult.scoreReasons?.[key] || scoreReasonFallbacks[key]}
+                        value={value}
+                      />
+                    ))}
+                  </div>
                 </section>
               </>
             )}
