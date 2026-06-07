@@ -172,7 +172,11 @@ async function requestPracticeSummary(payload) {
   try {
     return await fetch("/api/practice/summary", requestOptions);
   } catch {
-    return fetch("http://localhost:3001/api/practice/summary", requestOptions);
+    try {
+      return await fetch("http://localhost:3001/api/practice/summary", requestOptions);
+    } catch (err) {
+      throw new Error("生成课后总结失败，请确认后端服务已启动。");
+    }
   }
 }
 
@@ -387,6 +391,7 @@ function App() {
   const [practiceMode, setPracticeMode] = useState("feedback");
   const [userInput, setUserInput] = useState("");
   const [conversationMessages, setConversationMessages] = useState([]);
+  const [modeConversations, setModeConversations] = useState({});
   const [practiceResult, setPracticeResult] = useState(null);
   const [summaryResult, setSummaryResult] = useState(null);
   const [summaryHistory, setSummaryHistory] = useState(loadSummaryHistory);
@@ -466,7 +471,7 @@ function App() {
   const [isShadowingRecording, setIsShadowingRecording] = useState(false);
 
   function getShadowingSentences(scenarioId) { return shadowingSentences[scenarioId] || shadowingSentences.interview; }
-  function getRecentUserTurns(count) { return conversationMessages.filter(function(m){return m.role==="user"}).slice(-(count||5)).map(function(m){return m.content}); }
+  function getRecentUserTurns(count) { var all = []; Object.keys(modeConversations).forEach(function(k){ all = all.concat(modeConversations[k]) }); all = all.concat(conversationMessages); var seen = {}; var result = []; for(var i=all.length-1;i>=0;i--){ if(all[i].role==="user"){ var t=all[i].content.trim().toLowerCase(); if(!seen[t]&&t){ seen[t]=true; result.unshift(all[i].content) } } } var limit = count||10; if(!result.length){ result = getShadowingSentences(selectedScenarioId).slice(0,limit) } return result.slice(-limit); }
 
   async function handleShadowingTranslate() {
     var text = shadowingCustomText.trim();
@@ -714,8 +719,17 @@ function App() {
   }
 
   function handleModeChange(modeId) {
+    setModeConversations(function(prev){ var next = {}; Object.keys(prev).forEach(function(k){next[k]=prev[k]}); next[practiceMode] = conversationMessages; return next; });
     setPracticeMode(modeId);
-    resetConversation();
+    setConversationMessages(modeConversations[modeId] || []);
+    setPracticeResult(null);
+    setSummaryResult(null);
+    setFeedbackCandidate(null);
+    setUserInput("");
+    setStreamedReply("");
+    setQuickReplySource("");
+    setIsConversationEnded(false);
+    setErrorMessage("");
   }
 
   function speakAiReply(text) {
@@ -1627,6 +1641,7 @@ function App() {
       socket.addEventListener("open", () => {
         setIsRealtimeActive(true);
         setRealtimeStatus("已连接 Qwen Realtime，请直接说英文。");
+        handleReplayAiReply(selectedScenario.prompt);
       });
 
       socket.addEventListener("message", (message) => {
@@ -1949,11 +1964,7 @@ function App() {
                 {isSubmitting ? "生成纠错评分中..." : practiceResult ? "纠错评分已生成" : "获取完整纠错评分"}
               </button>
               </>
-            ) : (
-              <div className="mode-guide">
-                沉浸式对话中不做逐句纠错；点击下方 Qwen 实时语音对话开始练习，结束后统一生成课后报告。
-              </div>
-            )}
+            ) : null}
 
             {isImmersiveMode && (
               <div className="realtime-panel">
@@ -1969,36 +1980,10 @@ function App() {
                   <p className="section-label">Qwen3.5-Omni-Realtime</p>
                   <p>{realtimeStatus}</p>
                 </div>
-                <div className="realtime-copy">
-                  <span>你说的话</span>
-                  <p>{realtimeTranscript || "开始后直接对麦克风说英文，这里会显示实时识别文本。"}</p>
-                </div>
-                <div className="realtime-copy">
-                  <span>实时回复</span>
-                  <p>{realtimeReply || "模型的实时语音回复文本会显示在这里，音频会直接播放。"}</p>
-                </div>
               </div>
             )}
 
-            {!isImmersiveMode && (
-              <div className="recording-panel">
-                <div>
-                  <p className="section-label">单句识别状态</p>
-                  <p>{recognitionStatus}</p>
-                  {(isStreamingReply || isSubmitting || streamedReply) && <p className="muted-card">{streamStatus}</p>}
-                </div>
-              </div>
-            )}
 
-            <div className="pipeline-card">
-              <p className="section-label">实时链路说明</p>
-              <div className="pipeline-steps">
-                <span>语音识别完成后立即显示用户文本</span>
-                <span>AI 回复返回后立即展示并朗读</span>
-                <span>详细纠错和总结延后生成，避免打断对话</span>
-                {firstSentenceLatency !== null && <span>首句响应记录：{firstSentenceLatency} ms</span>}
-              </div>
-            </div>
 
             <div className="conversation-actions">
               <button
