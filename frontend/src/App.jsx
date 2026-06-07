@@ -37,6 +37,11 @@ const practiceModes = [
     id: "immersive",
     label: "沉浸对话",
     description: "AI 全程只用英文对话，结束后再统一总结。"
+  },
+  {
+    id: "shadowing",
+    label: "跟读模仿",
+    description: "朗读示例英文句子，AI 评估发音准确性并给出逐词对比反馈。"
   }
 ];
 
@@ -439,6 +444,68 @@ function App() {
     [practiceMode]
   );
   const isImmersiveMode = practiceMode === "immersive";
+  const effectiveIsShadowing = practiceMode === "shadowing";
+
+  const shadowingSentences = {
+    interview: ["I led a team of five engineers to deliver the project on time.","My greatest strength is solving complex problems.","I have three years of experience in full-stack development."],
+    restaurant: ["I would like to order a grilled chicken sandwich, please.","Could I have the check, please?","I would like my steak medium rare, thank you."],
+    meeting: ["This week I completed the API integration and started testing.","I think we should prioritize the user feedback.","My main blocker is waiting for the design team."],
+  };
+  const [shadowingSentenceIdx, setShadowingSentenceIdx] = useState(0);
+  const [shadowingReference, setShadowingReference] = useState("");
+  const [shadowingTranscript, setShadowingTranscript] = useState("");
+  const [shadowingResult, setShadowingResult] = useState(null);
+  const [isShadowingSubmitting, setIsShadowingSubmitting] = useState(false);
+  const [shadowingAudioUrl, setShadowingAudioUrl] = useState("");
+  const [shadowingSourceType, setShadowingSourceType] = useState("history");
+  const [shadowingCustomText, setShadowingCustomText] = useState("");
+  const [isTranslatingCustom, setIsTranslatingCustom] = useState(false);
+  const shadowingMediaRecorderRef = useRef(null);
+  const shadowingMediaStreamRef = useRef(null);
+  const shadowingRecognitionRef = useRef(null);
+  const [isShadowingRecording, setIsShadowingRecording] = useState(false);
+
+  function getShadowingSentences(scenarioId) { return shadowingSentences[scenarioId] || shadowingSentences.interview; }
+  function getRecentUserTurns(count) { return conversationMessages.filter(function(m){return m.role==="user"}).slice(-(count||5)).map(function(m){return m.content}); }
+
+  async function handleShadowingTranslate() {
+    var text = shadowingCustomText.trim();
+    if (!text || isTranslatingCustom) return;
+    setIsTranslatingCustom(true);
+    try {
+      var res = await fetch("/api/practice/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: text, direction: "en" }),
+      });
+      if (!res.ok) throw new Error("Translation failed");
+      var data = await res.json();
+      if (data.translation) {
+        setShadowingCustomText(data.translation);
+        setShadowingReference(data.translation);
+        setShadowingTranscript("");
+        setShadowingResult(null);
+        handleReplayAiReply(data.translation);
+      }
+    } catch (err) {
+      console.error("Shadowing translate error:", err);
+    } finally {
+      setIsTranslatingCustom(false);
+    }
+  }
+
+  function handleShadowingPickSentence() {
+    if (shadowingSourceType === "custom" && shadowingCustomText.trim()) { setShadowingReference(shadowingCustomText.trim()); setShadowingTranscript(""); setShadowingResult(null); setShadowingAudioUrl(""); return; }
+    if (shadowingSourceType === "history") { var ut = getRecentUserTurns(5); if (ut.length) { var idx = Math.floor(Math.random()*ut.length); setShadowingSentenceIdx(idx); setShadowingReference(ut[idx]); setShadowingTranscript(""); setShadowingResult(null); setShadowingAudioUrl(""); return; } }
+    var s = getShadowingSentences(selectedScenarioId); var idx = Math.floor(Math.random()*s.length); setShadowingSentenceIdx(idx); setShadowingReference(s[idx]); setShadowingTranscript(""); setShadowingResult(null); setShadowingAudioUrl(""); }
+
+  function handleShadowingNextSentence() { var s = shadowingSourceType === "history" ? getRecentUserTurns(5) : getShadowingSentences(selectedScenarioId); if (!s.length) return; var idx = (shadowingSentenceIdx+1)%s.length; setShadowingSentenceIdx(idx); setShadowingReference(s[idx]); setShadowingTranscript(""); setShadowingResult(null); setShadowingAudioUrl(""); }
+
+  async function handleShadowingRecord() { var r = shadowingMediaRecorderRef.current; if (r && r.state === "recording") { r.stop(); if (shadowingRecognitionRef.current) { try { shadowingRecognitionRef.current.stop(); } catch(e) {} } setIsShadowingRecording(false); return; } try { if (shadowingMediaStreamRef.current) { shadowingMediaStreamRef.current.getTracks().forEach(function(t) { t.stop(); }); } if (shadowingRecognitionRef.current) { try { shadowingRecognitionRef.current.abort(); } catch(e) {} shadowingRecognitionRef.current=null; } if (shadowingAudioUrl) { URL.revokeObjectURL(shadowingAudioUrl); } setShadowingAudioUrl(""); setShadowingTranscript("(正在识别...)"); setShadowingResult(null); var stream = await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}}); var mt = MediaRecorder.isTypeSupported("audio/webm")?"audio/webm":"audio/mp4"; var mr = new MediaRecorder(stream,{mimeType:mt}); var chunks=[]; mr.ondataavailable=function(e){if(e.data.size>0)chunks.push(e.data)}; mr.onstop=function(){ setIsShadowingRecording(false); setShadowingAudioUrl(URL.createObjectURL(new Blob(chunks,{type:mt}))); }; mr.start(); shadowingMediaRecorderRef.current=mr; var SR=getSpeechRecognitionConstructor(); if (SR) { var rec=new SR(); rec.lang="en-US"; rec.continuous=false; rec.interimResults=true; var hasResult=false; rec.onresult=function(ev){ hasResult=true; var parts=[]; for(var i=0;i<ev.results.length;i++){ parts.push(ev.results[i][0].transcript); } setShadowingTranscript(parts.join(" ").trim()); }; rec.onerror=function(ev){ if(!hasResult){ if(ev.error==="aborted"){ setShadowingTranscript(""); }else if(ev.error==="no-speech"){ setShadowingTranscript("(未检测到语音，请重试)"); }else{ setShadowingTranscript("(语音识别失败: "+ev.error+")"); } } }; rec.onend=function(){ if(!hasResult){ setShadowingTranscript("(未识别到内容，请重试)"); } }; rec.start(); shadowingRecognitionRef.current=rec; } shadowingMediaStreamRef.current=stream; setIsShadowingRecording(true); }catch(err){ setShadowingTranscript("(麦克风权限被拒绝或不可用)"); console.error(err); } }
+
+  async function handleShadowingSubmit() { if(!shadowingReference||!shadowingAudioUrl)return; var transcript=shadowingTranscript.trim()||""; if(!transcript||transcript.startsWith("(")){ setShadowingTranscript("(请先完成录音并等待识别结果)"); return; } setIsShadowingSubmitting(true); try{var res=await fetch("/api/pronunciation/imitate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scenarioId:selectedScenarioId,referenceText:shadowingReference,transcript:transcript})});if(!res.ok)throw new Error("API error");var data=await res.json();setShadowingResult(data);saveSessionRecord(data)}catch(err){console.error(err)}finally{setIsShadowingSubmitting(false)} }
+
+  function saveSessionRecord(data) { var e={scenarioId:selectedScenarioId,mode:practiceMode,timestamp:Date.now()}; if(data&&data.scores){e.averageScore=calculateAverageScore(data.scores);e.scores=data.scores} if(data&&data.accuracyScore!==undefined)e.accuracyScore=data.accuracyScore; if(data&&(data.summary||data.encouragement))e.summary=data.summary||data.encouragement||""; var nh=[e].concat(summaryHistory).slice(0,10);setSummaryHistory(nh);try{window.localStorage.setItem(SUMMARY_HISTORY_KEY,JSON.stringify(nh))}catch(err){} }
   const displayAiReply = useMemo(() => {
     const latestAssistantMessage = [...conversationMessages].reverse().find((message) => message.role === "assistant");
     return latestAssistantMessage?.content || realtimeReply || practiceResult?.aiReply || "";
@@ -1727,6 +1794,62 @@ function App() {
           </div>
         </section>
 
+        {effectiveIsShadowing && (
+        <section className="shadowing-practice-area">
+          <div className="shadowing-reference-card">
+            <div className="shadowing-card-header">
+              <p className="section-label">参考句子</p>
+              <span className="shadowing-sentence-num">#{shadowingSentenceIdx+1}</span>
+            </div>
+            <div className="shadowing-source-toggle">
+              <button className={shadowingSourceType==="history"?"active-seg":"seg-button"} onClick={function(){setShadowingSourceType("history")}} type="button">从对话记录</button>
+              <button className={shadowingSourceType==="custom"?"active-seg":"seg-button"} onClick={function(){setShadowingSourceType("custom")}} type="button">自定义</button>
+            </div>
+            {shadowingSourceType==="history"&&(
+              <div className="shadowing-history-picks">
+                {getRecentUserTurns(5).length===0&&<p className="muted-card">暂无对话记录</p>}
+                {getRecentUserTurns(5).map(function(t,i){return (<button key={i} className="shadowing-history-item replay-button" onClick={function(){setShadowingReference(t);setShadowingTranscript("");setShadowingResult(null);setShadowingAudioUrl("")}} type="button">{t.length>60?t.slice(0,60)+"...":t}</button>)})}
+              </div>
+            )}
+            {shadowingSourceType==="custom"&&(
+              <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+              <textarea className="shadowing-custom-input" placeholder="输入想练习的英文句子，支持中文自动翻译" rows={3} value={shadowingCustomText} onChange={function(e){setShadowingCustomText(e.target.value)}} style={{flex:1}}/>
+              <button className="replay-button" disabled={isTranslatingCustom||!shadowingCustomText.trim()} onClick={handleShadowingTranslate} type="button" style={{whiteSpace:"nowrap"}}>
+              {isTranslatingCustom?"翻译中":"翻译"}
+              </button></div>)}
+            <p className="shadowing-reference-text">{shadowingReference||"点击上方对话记录或输入自定义句子"}</p>
+            <div className="shadowing-ref-actions">
+              <button className="replay-button" onClick={handleShadowingPickSentence} type="button">{shadowingReference?"换一句":shadowingSourceType==="custom"?"确定":"随机选句"}</button>
+              {shadowingReference&&<button className="replay-button" onClick={function(){handleReplayAiReply(shadowingReference)}} type="button">播放原声</button>}
+            </div>
+          </div>
+          {shadowingReference&&(
+            <div className="shadowing-record-area">
+              <div className="shadowing-card-header"><p className="section-label">你的跟读</p>{shadowingAudioUrl&&<span className="source-tag">已录音</span>}</div>
+              {shadowingAudioUrl&&<audio controls className="shadowing-audio-player"><source src={shadowingAudioUrl} type={shadowingMediaRecorderRef.current&&shadowingMediaRecorderRef.current.mimeType||"audio/webm"}/></audio>}
+              <textarea className="shadowing-custom-input" rows={2} value={shadowingTranscript} onChange={function(e){setShadowingTranscript(e.target.value)}} placeholder="录音识别结果会显示在这里，也可手动修改"/>
+              <div className="shadowing-record-actions">
+                <button className={isShadowingRecording?"record-button recording":"record-button"} onClick={handleShadowingRecord} type="button" disabled={isShadowingSubmitting}><span className="record-dot"/>{isShadowingRecording?"停止录音":shadowingTranscript?"重新录音":"开始录音"}</button>
+                <button className="feedback-submit-button" disabled={isShadowingSubmitting||!shadowingAudioUrl||!shadowingReference} onClick={handleShadowingSubmit} type="button">{isShadowingSubmitting?"评估中":shadowingResult?"重新评估":"评估发音"}</button>
+              </div>
+            </div>
+          )}
+          {shadowingResult&&(
+            <div className="shadowing-result-area">
+              <div className="shadowing-card-header"><p className="section-label">跟读结果</p><span className="source-tag">{shadowingResult.source||"mock"}</span></div>
+              <div className="shadowing-accuracy-bar"><div className="shadowing-accuracy-fill" style={{width:shadowingResult.accuracyScore+"%"}}><span>{shadowingResult.accuracyScore}%</span></div></div>
+              <div className="shadowing-word-grid">{shadowingResult.aligned&&shadowingResult.aligned.map(function(w,i){return (<div key={i} className={"shadowing-word-pair shadowing-word-"+w.status}><span className="shadowing-word-ref">{w.reference}</span><span className="shadowing-word-user">{w.user}</span><span className="shadowing-word-status">{w.status==="match"?"✓":w.status==="close"?"~":w.status==="missing"?"缺失":w.status==="extra"?"多余":"✗"}</span></div>)})}</div>
+              {shadowingResult.difficultWords&&shadowingResult.difficultWords.length>0&&(<div className="shadowing-difficult-words"><span>重点练习：</span>{shadowingResult.difficultWords.map(function(w,i){return (<span key={i} className="replay-button" style={{cursor:"default"}}>{w}</span>)})}</div>)}
+              {shadowingResult.encouragement&&<p className="shadowing-encouragement">{shadowingResult.encouragement}</p>}
+              {shadowingResult.tips&&shadowingResult.tips.length>0&&(<div className="shadowing-tips"><p className="section-label">学习建议</p><ul>{shadowingResult.tips.map(function(t,i){return <li key={i}>{t}</li>})}</ul></div>)}
+              {shadowingResult.phonemeNotes&&shadowingResult.phonemeNotes.length>0&&(<div className="shadowing-tips"><p className="section-label">音素提示</p><ul>{shadowingResult.phonemeNotes.map(function(n,i){return <li key={i}>{n}</li>})}</ul></div>)}
+              <button className="record-button" onClick={handleShadowingNextSentence} type="button">下一句</button>
+            </div>
+          )}
+        </section>
+      )}
+
+        {!effectiveIsShadowing && (<>
         <section className="conversation-grid">
           <div className="conversation-panel">
             <div className="panel-header">
@@ -1990,15 +2113,29 @@ function App() {
                       </ul>
                     </div>
                   </div>
-                  {summaryResult?.scores && (
-                    <div className="trend-panel">
-                      <div>
-                        <span>综合均分</span>
-                        <strong>{calculateAverageScore(summaryResult.scores)}</strong>
+            <section className="feedback-card" style={{marginTop: 12}}>
+              <p className="section-label">学习记录</p>
+              {summaryHistory.length === 0 ? (
+                <p className="muted-card">尚无记录</p>
+              ) : (
+                <div className="score-chart">
+                  {summaryHistory.slice(0, 8).map((entry, i) => {
+                    const score = entry.averageScore ?? entry.accuracyScore ?? 0;
+                    const ml = entry.mode === "shadowing" ? "跟读" : entry.mode === "immersive" ? "沉浸" : "反馈";
+                    const bc = score >= 80 ? "bar-good" : score >= 60 ? "bar-ok" : "bar-low";
+                    return (
+                      <div key={i} className="chart-row">
+                        <span className="chart-label">{ml}</span>
+                        <div className="chart-bar-track"><div className={"chart-bar " + bc} style={{ width: score + "%" }} /></div>
+                        <span className="chart-score">{score}{entry.averageScore !== undefined ? "分" : "%"}</span>
                       </div>
-                      <p>{getTrendText(summaryHistory)}</p>
-                    </div>
-                  )}
+                    );
+                  })}
+                </div>
+              )}
+              <p className="section-label">趋势</p>
+              <p>{getTrendText(summaryHistory)}</p>
+            </section>
                   {summaryResult?.scoreBasis && <p className="score-basis">{summaryResult.scoreBasis}</p>}
                 </>
               ) : (
@@ -2109,6 +2246,8 @@ function App() {
             )}
           </aside>
         </section>
+          </>
+        )}
       </section>
     </main>
   );

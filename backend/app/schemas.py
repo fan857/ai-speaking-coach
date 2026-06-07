@@ -21,5 +21,12 @@ class SummaryRequest(BaseModel):
     history: list[ConversationMessage] = Field(default_factory=list)
 
 
+
+class ImitateRequest(BaseModel):
+    scenarioId: str
+    referenceText: str
+    transcript: str
+
 class TranslationRequest(BaseModel):
     text: str
+    direction: str = "auto"
