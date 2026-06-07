@@ -1031,3 +1031,362 @@ textarea:disabled {
     max-width: 100%;
   }
 }
+
+
+.shadowing-practice-area {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.shadowing-reference-card,
+.shadowing-record-area,
+.shadowing-result-area {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.shadowing-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.shadowing-sentence-num {
+  font-size: 0.78rem;
+  color: #718096;
+}
+
+.shadowing-reference-text {
+  font-size: 1.25rem;
+  color: #1a365d;
+  font-weight: 600;
+  line-height: 1.6;
+  padding: 12px 0;
+}
+
+.shadowing-ref-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.shadowing-record-area .source-tag {
+  font-size: 0.75rem;
+  background: #eaf6fb;
+  color: #0f5f88;
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.shadowing-audio-player {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.shadowing-transcript {
+  font-size: 1.05rem;
+  color: #4a5568;
+  line-height: 1.5;
+  padding: 8px 0;
+}
+
+.shadowing-record-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.shadowing-accuracy-bar {
+  height: 28px;
+  border-radius: 6px;
+  background: #edf2f7;
+  margin: 12px 0;
+  overflow: hidden;
+}
+
+.shadowing-accuracy-fill {
+  height: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #48bb78, #38a169);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 10px;
+  min-width: 40px;
+  transition: width 0.4s ease;
+}
+
+.shadowing-accuracy-fill span {
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.shadowing-word-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.shadowing-word-pair {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 6px;
+  min-width: 60px;
+}
+
+.shadowing-word-match {
+  background: #e9f8ef;
+  border: 1px solid #a9d0bb;
+}
+
+.shadowing-word-close {
+  background: #fef9e7;
+  border: 1px solid #f9d878;
+}
+
+.shadowing-word-mismatch {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.shadowing-word-missing {
+  background: #f3f4f6;
+  border: 1px dashed #d1d5db;
+}
+
+.shadowing-word-extra {
+  background: #eff6ff;
+  border: 1px dashed #bfdbfe;
+}
+
+.shadowing-word-ref {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1a365d;
+}
+
+.shadowing-word-user {
+  font-size: 0.78rem;
+  color: #718096;
+  margin-top: 2px;
+}
+
+.shadowing-word-status {
+  font-size: 0.7rem;
+  margin-top: 2px;
+}
+
+.shadowing-word-match .shadowing-word-status { color: #12623f; }
+.shadowing-word-close .shadowing-word-status { color: #b7791f; }
+.shadowing-word-mismatch .shadowing-word-status { color: #dc2626; }
+.shadowing-word-missing .shadowing-word-status { color: #9ca3af; }
+.shadowing-word-extra .shadowing-word-status { color: #3b82f6; }
+
+.shadowing-difficult-words {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+
+.shadowing-difficult-words > span {
+  font-size: 0.82rem;
+  color: #718096;
+}
+
+.shadowing-encouragement {
+  font-size: 0.92rem;
+  color: #48bb78;
+  font-weight: 600;
+  padding: 8px 0;
+}
+
+.shadowing-tips {
+  margin: 8px 0;
+}
+
+.shadowing-tips ul {
+  margin: 6px 0 0 18px;
+  color: #4a5568;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+
+/* Learning history */
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.history-entry {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #fafbfc;
+}
+
+.history-entry-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.history-summary {
+  font-size: 0.82rem;
+  color: #64748b;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.score-good { color: #16a34a; font-size: 0.92rem; }
+.score-ok { color: #d97706; font-size: 0.92rem; }
+.score-low { color: #dc2626; font-size: 0.92rem; }
+
+/* Shadowing source toggle */
+.shadowing-source-toggle {
+  display: flex;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.seg-button {
+  padding: 4px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 0.82rem;
+  cursor: pointer;
+  color: #64748b;
+}
+
+.active-seg {
+  padding: 4px 12px;
+  border: 1px solid #2563eb;
+  border-radius: 6px;
+  background: #eff6ff;
+  font-size: 0.82rem;
+  cursor: pointer;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.shadowing-history-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.shadowing-history-item {
+  font-size: 0.82rem;
+  padding: 4px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #f8fafc;
+  cursor: pointer;
+  color: #334155;
+  max-width: 100%;
+  text-align: left;
+}
+
+.shadowing-history-item:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.shadowing-custom-input {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 0.92rem;
+  resize: vertical;
+  margin: 8px 0;
+}
+
+/* Score chart */
+.score-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chart-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chart-label {
+  width: 36px;
+  font-size: 0.74rem;
+  color: #64748b;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.chart-bar-track {
+  flex: 1;
+  height: 16px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  overflow: hidden;
+}
+
+.chart-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.bar-good { background: #22c55e; }
+.bar-ok { background: #eab308; }
+.bar-low { background: #ef4444; }
+
+.chart-score {
+  width: 36px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #334155;
+  flex-shrink: 0;
+}
+
+/* Shadowing full area */
+.shadowing-full-area {
+  width: 100%;
+}
+
+/* Compact product header */
+.product-overview {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+
+.product-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e3a5f;
+}
+
+/* Cleaner conversation grid */
+.conversation-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr);
+  gap: 16px;
+  align-items: start;
+}

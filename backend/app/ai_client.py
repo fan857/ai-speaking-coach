@@ -255,8 +255,8 @@ async def request_ai_summary_result(
     }
 
 
-async def request_ai_translation_result(text: str) -> dict[str, Any] | None:
-    result = await invoke_deepseek_json(get_translation_prompt(text), 0.1)
+async def request_ai_translation_result(text: str, direction: str = "auto") -> dict[str, Any] | None:
+    result = await invoke_deepseek_json(get_translation_prompt(text, direction), 0.1)
     if not result:
         return None
 
@@ -265,3 +265,71 @@ async def request_ai_translation_result(text: str) -> dict[str, Any] | None:
         "provider": result["provider"],
         "model": result["model"],
     }
+
+async def request_ai_pronunciation_result(
+    scenario_name: str,
+    reference_text: str,
+    transcript: str,
+    accuracy_score: int,
+    difficult_words: list[str],
+) -> dict[str, Any]:
+    """Call DeepSeek for qualitative pronunciation/imitation feedback."""
+    from app.config import get_ai_provider_config
+    from app.prompts import get_pronunciation_prompt
+
+    config = get_ai_provider_config()
+    if not config:
+        return _mock_pronunciation_feedback(accuracy_score, difficult_words)
+
+    try:
+        from langchain_deepseek import ChatDeepSeek
+
+        model = ChatDeepSeek(
+            model=config["model"],
+            api_key=config["api_key"],
+            api_base=config["base_url"],
+            temperature=0.6,
+        )
+        prompt = get_pronunciation_prompt(
+            scenario_name, reference_text, transcript, accuracy_score, difficult_words
+        )
+        response = await model.ainvoke(prompt)
+        return _parse_pronunciation_response(response.content, accuracy_score, difficult_words)
+    except Exception:
+        return _mock_pronunciation_feedback(accuracy_score, difficult_words)
+
+
+def _parse_pronunciation_response(
+    raw: str, accuracy_score: int, difficult_words: list[str]
+) -> dict[str, Any]:
+    """Parse AI response or fall back."""
+    import json
+    text = raw.strip()
+    if text.startswith("{") and text.endswith("}"):
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+    return _mock_pronunciation_feedback(accuracy_score, difficult_words)
+
+
+def _mock_pronunciation_feedback(accuracy_score: int, difficult_words: list[str]) -> dict[str, Any]:
+    """Generate mock pronunciation feedback."""
+    if accuracy_score >= 90:
+        return {
+            "tips": ["????????????", "??????????????????"],
+            "phonemeNotes": ["?? /th/ ??? the?that????????"],
+            "encouragement": "??????????????????",
+        }
+    if accuracy_score >= 70:
+        return {
+            "tips": ["????????????????", f"????????{", ".join(difficult_words)}"],
+            "phonemeNotes": ["?? /r/ ? /l/ ????? right vs light?"],
+            "encouragement": "?????????????????????",
+        }
+    return {
+        "tips": ["???????????????????", "????????????????"],
+        "phonemeNotes": ["???????? ship vs sheep???????????"],
+        "encouragement": "??????????????????",
+    }
+

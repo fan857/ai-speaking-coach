@@ -78,15 +78,24 @@ def get_coach_prompt(
     return get_feedback_prompt(scenario_id, transcript, history)
 
 
-def get_translation_prompt(text: str) -> str:
+def get_translation_prompt(text: str, direction: str = "auto") -> str:
+    if direction == "en":
+        task = "Translate the following Chinese text into natural English."
+        label = "Chinese text"
+    elif direction == "zh":
+        task = "Translate the following English message into natural Simplified Chinese."
+        label = "English message"
+    else:
+        task = "If the text is Chinese, translate it to English. If it is English, translate it to Simplified Chinese."
+        label = "Text to translate"
     return "\n".join(
         [
-            "You are a concise English-to-Chinese translator for an English speaking practice app.",
-            "Translate the following English message into natural Simplified Chinese.",
-            "Keep the translation faithful and easy for a beginner to understand.",
+            "You are a concise translator for an English speaking practice app.",
+            task,
+            "Keep the translation faithful and easy to understand.",
             "Return JSON only with this shape:",
-            '{"translation":"Chinese translation"}',
-            f"English message: {text}",
+            '{"translation":"translated text"}',
+            f"{label}: {text}",
         ]
     )
 
@@ -127,3 +136,32 @@ def get_summary_prompt(scenario_id: str, history: list[ConversationMessage], mod
             "7. Mention concrete examples from the conversation when useful.",
         ]
     )
+
+def get_pronunciation_prompt(
+    scenario_name: str,
+    reference_text: str,
+    transcript: str,
+    accuracy_score: int,
+    difficult_words: list[str],
+) -> str:
+    difficult_str = ", ".join(difficult_words) if difficult_words else "none"
+    return "\n".join(
+        [
+            "You are a pronunciation coach for an English speaking practice app.",
+            f"Practice scenario: {scenario_name}",
+            f"Reference sentence: {reference_text}",
+            f"User transcript (what the ASR heard): {transcript}",
+            f"Word-level accuracy: {accuracy_score}/100",
+            f"Difficult words (mismatched or missing): {difficult_str}",
+            "Analyze the user''s imitation attempt and return JSON:",
+            '{"tips":["Chinese pronunciation/expression tip 1","tip 2"],'
+            '"phonemeNotes":["Chinese phoneme note 1","note 2"],'
+            '"encouragement":"One warm Chinese encouragement sentence"}',
+            "Rules:",
+            "1. tips: 2-3 practical Chinese tips for improving the specific words that were wrong.",
+            "2. phonemeNotes: 1-2 Chinese notes about likely phoneme-level issues (e.g. th sound, v/w, r/l, stress pattern).",
+            "3. encouragement: one short warm sentence in Chinese, praise effort, motivate practice.",
+            "4. Output only JSON, no Markdown.",
+        ]
+    )
+

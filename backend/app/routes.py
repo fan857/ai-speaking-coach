@@ -4,9 +4,10 @@ from fastapi import APIRouter, HTTPException
 
 from app.ai_client import request_ai_coach_result, request_ai_summary_result, request_ai_translation_result
 from app.config import get_ai_provider_status
-from app.mock_feedback import get_mock_immersive_result, get_mock_practice_result, get_mock_summary_result
+from app.pronunciation import assess_imitation
+from app.mock_feedback import get_mock_immersive_result, get_mock_practice_result, get_mock_pronunciation_result, get_mock_summary_result
 from app.scenarios import SCENARIOS
-from app.schemas import PracticeRequest, SummaryRequest, TranslationRequest
+from app.schemas import ImitateRequest, PracticeRequest, SummaryRequest, TranslationRequest
 
 
 router = APIRouter(prefix="/api")
@@ -128,9 +129,10 @@ async def practice_coach(request: PracticeRequest) -> dict[str, Any]:
 @router.post("/practice/translate")
 async def practice_translate(request: TranslationRequest) -> dict[str, Any]:
     text = validate_translation_request(request)
+    direction = getattr(request, "direction", "auto")
 
     try:
-        ai_result = await request_ai_translation_result(text)
+        ai_result = await request_ai_translation_result(text, direction)
         if ai_result and ai_result.get("translation"):
             return {
                 "text": text,
@@ -183,3 +185,34 @@ async def practice_summary(request: SummaryRequest) -> dict[str, Any]:
         "source": "mock",
         "warning": "未配置 DEEPSEEK_API_KEY，已使用 mock 总结兜底。",
     }
+
+@router.post("/pronunciation/imitate")
+async def pronunciation_imitate(request: ImitateRequest) -> dict[str, Any]:
+    if request.scenarioId not in SCENARIOS:
+        raise HTTPException(status_code=400, detail="?????????")
+
+    transcript = request.transcript.strip()
+    if not transcript:
+        raise HTTPException(status_code=400, detail="???????????????")
+
+    reference_text = request.referenceText.strip()
+    if not reference_text:
+        raise HTTPException(status_code=400, detail="???????")
+
+    try:
+        result = await assess_imitation(
+            request.scenarioId,
+            reference_text,
+            transcript,
+        )
+        if result:
+            result["source"] = "deepseek"
+            return result
+    except Exception:
+        pass
+
+    return {
+        "source": "mock",
+        **get_mock_pronunciation_result(request.scenarioId, reference_text, transcript),
+    }
+
