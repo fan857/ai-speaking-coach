@@ -504,9 +504,105 @@ function App() {
 
   function handleShadowingNextSentence() { var s = shadowingSourceType === "history" ? getRecentUserTurns(5) : getShadowingSentences(selectedScenarioId); if (!s.length) return; var idx = (shadowingSentenceIdx+1)%s.length; setShadowingSentenceIdx(idx); setShadowingReference(s[idx]); setShadowingTranscript(""); setShadowingResult(null); setShadowingAudioUrl(""); }
 
-  async function handleShadowingRecord() { var r = shadowingMediaRecorderRef.current; if (r && r.state === "recording") { r.stop(); if (shadowingRecognitionRef.current) { try { shadowingRecognitionRef.current.stop(); } catch(e) {} } setIsShadowingRecording(false); return; } try { if (shadowingMediaStreamRef.current) { shadowingMediaStreamRef.current.getTracks().forEach(function(t) { t.stop(); }); } if (shadowingRecognitionRef.current) { try { shadowingRecognitionRef.current.abort(); } catch(e) {} shadowingRecognitionRef.current=null; } if (shadowingAudioUrl) { URL.revokeObjectURL(shadowingAudioUrl); } setShadowingAudioUrl(""); setShadowingTranscript("(正在识别...)"); setShadowingResult(null); var stream = await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}}); var mt = MediaRecorder.isTypeSupported("audio/webm")?"audio/webm":"audio/mp4"; var mr = new MediaRecorder(stream,{mimeType:mt}); var chunks=[]; mr.ondataavailable=function(e){if(e.data.size>0)chunks.push(e.data)}; mr.onstop=function(){ setIsShadowingRecording(false); setShadowingAudioUrl(URL.createObjectURL(new Blob(chunks,{type:mt}))); }; mr.start(); shadowingMediaRecorderRef.current=mr; var SR=getSpeechRecognitionConstructor(); if (SR) { var rec=new SR(); rec.lang="en-US"; rec.continuous=false; rec.interimResults=true; var hasResult=false; rec.onresult=function(ev){ hasResult=true; var parts=[]; for(var i=0;i<ev.results.length;i++){ parts.push(ev.results[i][0].transcript); } setShadowingTranscript(parts.join(" ").trim()); }; rec.onerror=function(ev){ if(!hasResult){ if(ev.error==="aborted"){ setShadowingTranscript(""); }else if(ev.error==="no-speech"){ setShadowingTranscript("(未检测到语音，请重试)"); }else{ setShadowingTranscript("(语音识别失败: "+ev.error+")"); } } }; rec.onend=function(){ if(!hasResult){ setShadowingTranscript("(未识别到内容，请重试)"); } }; rec.start(); shadowingRecognitionRef.current=rec; } shadowingMediaStreamRef.current=stream; setIsShadowingRecording(true); }catch(err){ setShadowingTranscript("(麦克风权限被拒绝或不可用)"); console.error(err); } }
+  var _shadowingFinalTranscript = "";
+  var _shadowingHasFinal = false;
 
-  async function handleShadowingSubmit() { if(!shadowingReference||!shadowingAudioUrl)return; var transcript=shadowingTranscript.trim()||""; if(!transcript||transcript.startsWith("(")){ setShadowingTranscript("(请先完成录音并等待识别结果)"); return; } setIsShadowingSubmitting(true); try{var res=await fetch("/api/pronunciation/imitate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scenarioId:selectedScenarioId,referenceText:shadowingReference,transcript:transcript})});if(!res.ok)throw new Error("API error");var data=await res.json();setShadowingResult(data);saveSessionRecord(data)}catch(err){console.error(err)}finally{setIsShadowingSubmitting(false)} }
+  async function handleShadowingRecord() {
+    var r = shadowingMediaRecorderRef.current;
+    // --- STOP RECORDING ---
+    if (r && r.state === "recording") {
+      // Stop recognition to flush pending final results
+      if (shadowingRecognitionRef.current) {
+        try { shadowingRecognitionRef.current.stop(); } catch (e) {}
+      }
+      // Stop media recorder; mr.onstop will set isShadowingRecording(false)
+      r.stop();
+      return;
+    }
+    // --- START RECORDING ---
+    try {
+      if (shadowingMediaStreamRef.current) { shadowingMediaStreamRef.current.getTracks().forEach(function (t) { t.stop(); }); }
+      if (shadowingRecognitionRef.current) { try { shadowingRecognitionRef.current.abort(); } catch (e) { } shadowingRecognitionRef.current = null; }
+      if (shadowingAudioUrl) { URL.revokeObjectURL(shadowingAudioUrl); }
+      setShadowingAudioUrl("");
+      setShadowingTranscript("(正在识别...)");
+      setShadowingResult(null);
+      _shadowingFinalTranscript = "";
+      _shadowingHasFinal = false;
+
+      var stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      var mt = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
+      var mr = new MediaRecorder(stream, { mimeType: mt });
+      var chunks = [];
+      mr.ondataavailable = function (e) { if (e.data.size > 0) chunks.push(e.data); };
+      mr.onstop = function () {
+        setIsShadowingRecording(false);
+        setShadowingAudioUrl(URL.createObjectURL(new Blob(chunks, { type: mt })));
+      };
+      mr.start();
+      shadowingMediaRecorderRef.current = mr;
+
+      var SR = getSpeechRecognitionConstructor();
+      if (SR) {
+        var rec = new SR();
+        rec.lang = "en-US";
+        rec.continuous = true;
+        rec.interimResults = true;
+        rec.onresult = function (ev) {
+          var finalParts = [];
+          var interimParts = [];
+          for (var i = 0; i < ev.results.length; i++) {
+            var transcript = ev.results[i][0].transcript;
+            if (ev.results[i].isFinal) {
+              finalParts.push(transcript);
+              _shadowingHasFinal = true;
+            } else {
+              interimParts.push(transcript);
+            }
+          }
+          if (finalParts.length) {
+            _shadowingFinalTranscript = finalParts.join(" ").trim();
+          }
+          var displayed = _shadowingFinalTranscript;
+          if (interimParts.length) {
+            displayed = displayed ? displayed + " " + interimParts.join(" ") : interimParts.join(" ");
+          }
+          setShadowingTranscript(displayed || "(正在识别...)");
+        };
+        rec.onerror = function (ev) {
+          if (!_shadowingHasFinal) {
+            if (ev.error === "aborted") { setShadowingTranscript(""); }
+            else if (ev.error === "no-speech") { setShadowingTranscript("(未检测到语音，请重试)"); }
+            else if (ev.error === "network") { setShadowingTranscript("(网络识别不可用，请手动输入英文后点击评估)"); }
+            else if (ev.error === "not-allowed" || ev.error === "service-not-allowed") { setShadowingTranscript("(麦克风权限未授权)"); }
+            else { setShadowingTranscript("(识别不可用，请手动输入英文后点击评估)"); }
+          }
+        };
+        rec.onend = function () {
+          if (!_shadowingHasFinal) {
+            if (!_shadowingFinalTranscript) {
+              setShadowingTranscript("(未识别到内容，请手动输入英文后点击评估)");
+            }
+          }
+          shadowingRecognitionRef.current = null;
+        };
+        try {
+          rec.start();
+          shadowingRecognitionRef.current = rec;
+        } catch (e) {
+          mr.stop();
+          setShadowingTranscript("(语音识别启动失败)");
+          console.error(e);
+        }
+      }
+      shadowingMediaStreamRef.current = stream;
+      setIsShadowingRecording(true);
+    } catch (err) {
+      setShadowingTranscript("(麦克风权限被拒绝或不可用)");
+      console.error(err);
+    }
+  }
+  async function handleShadowingSubmit() { if(!shadowingReference||!shadowingAudioUrl)return; var transcript=shadowingTranscript.trim()||""; if(!transcript){ setShadowingTranscript("(请输入英文句子后再点击评估)"); return; } if(transcript.startsWith("(未") || transcript.startsWith("(请先")){ setShadowingTranscript("(请手动输入英文句子后再点击评估)"); return; } setIsShadowingSubmitting(true); try{var res=await fetch("/api/pronunciation/imitate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scenarioId:selectedScenarioId,referenceText:shadowingReference,transcript:transcript})});if(!res.ok)throw new Error("API error");var data=await res.json();setShadowingResult(data);saveSessionRecord(data)}catch(err){console.error(err)}finally{setIsShadowingSubmitting(false)} }
 
   function saveSessionRecord(data) { var e={scenarioId:selectedScenarioId,mode:practiceMode,timestamp:Date.now()}; if(data&&data.scores){e.averageScore=calculateAverageScore(data.scores);e.scores=data.scores} if(data&&data.accuracyScore!==undefined)e.accuracyScore=data.accuracyScore; if(data&&(data.summary||data.encouragement))e.summary=data.summary||data.encouragement||""; var nh=trimHistoryByMode([e].concat(summaryHistory));setSummaryHistory(nh);try{window.localStorage.setItem(SUMMARY_HISTORY_KEY,JSON.stringify(nh))}catch(err){} }
   const displayAiReply = useMemo(() => {
@@ -2162,3 +2258,4 @@ function App() {
 }
 
 export default App;
+
