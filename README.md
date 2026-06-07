@@ -2,7 +2,9 @@
 
 七牛云 x XEngineer 暑期实训营第三批次题目一：AI 英语口语陪练。
 
-> Demo 视频链接：MVP 完成后补充。
+> Demo 视频链接：我用夸克网盘给你分享了「AI英语口语陪练Demo.mp4」，点击链接或复制整段内容，打开「夸克APP」即可获取。
+/~18e73YwHOP~:/
+链接：https://pan.quark.cn/s/e0a93b2f41a1
 
 ## 当前能力
 
