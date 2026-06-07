@@ -1,6 +1,6 @@
 :root {
   color: #172033;
-  background: #eef3f8;
+  background: #eef5fb;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
@@ -16,6 +16,9 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(45, 91, 215, 0.1), transparent 34%),
+    linear-gradient(180deg, #f6f9fd 0%, #e8f1f8 100%);
 }
 
 button,
@@ -29,11 +32,11 @@ button {
 
 .app-shell {
   min-height: 100vh;
-  padding: 22px;
+  padding: 24px;
 }
 
 .workspace {
-  width: min(1220px, 100%);
+  width: min(1240px, 100%);
   margin: 0 auto;
 }
 
@@ -93,8 +96,8 @@ h2 {
   border: 1px solid #a9d0bb;
   border-radius: 999px;
   padding: 7px 12px;
-  color: #12623f;
-  background: #e9f8ef;
+  color: #0f5f88;
+  background: #eaf6fb;
   font-size: 0.84rem;
   font-weight: 800;
 }
@@ -107,25 +110,21 @@ h2 {
 
 .product-overview {
   display: grid;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.training-status-card,
-.requirement-tags {
-  border: 1px solid #d6e0ea;
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 10px 28px rgba(31, 47, 70, 0.06);
+  margin-bottom: 12px;
 }
 
 .training-status-card {
+  border: 1px solid #d7e4ef;
+  border-radius: 8px;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 12px 30px rgba(35, 55, 82, 0.06);
 }
 
 .training-status-card div {
-  padding: 13px 16px;
+  padding: 11px 14px;
   border-right: 1px solid #e3ebf3;
 }
 
@@ -148,46 +147,36 @@ h2 {
   font-size: 1rem;
 }
 
-.requirement-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 12px 14px;
-}
-
-.requirement-tags span {
-  border: 1px solid #c6ddf4;
-  border-radius: 999px;
-  padding: 6px 10px;
-  color: #23466b;
-  background: #f3f8ff;
-  font-size: 0.82rem;
-  font-weight: 900;
-}
-
-.scenario-panel,
-.mode-panel,
+.setup-panel,
 .conversation-panel,
-.feedback-card {
-  border: 1px solid #d6e0ea;
+.feedback-card,
+.feedback-center-header {
+  border: 1px solid #d7e4ef;
   border-radius: 8px;
   background: #ffffff;
-  box-shadow: 0 14px 34px rgba(31, 47, 70, 0.07);
+  box-shadow: 0 14px 34px rgba(35, 55, 82, 0.07);
 }
 
-.scenario-panel,
-.mode-panel {
-  display: flex;
+.setup-panel {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, auto) 1fr;
   align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 16px 18px;
-  margin-bottom: 14px;
+  gap: 14px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
 }
 
-.mode-panel p:last-child {
+.control-group {
+  display: grid;
+  gap: 7px;
+}
+
+.mode-summary {
+  align-self: end;
   margin-bottom: 0;
   color: #607086;
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .mode-explainer {
@@ -245,13 +234,13 @@ h2 {
 
 .conversation-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(380px, 0.95fr);
+  grid-template-columns: minmax(0, 1.65fr) minmax(340px, 0.9fr);
   gap: 18px;
   align-items: start;
 }
 
 .conversation-panel {
-  padding: 18px;
+  padding: 16px;
 }
 
 .panel-header,
@@ -268,10 +257,18 @@ h2 {
   font-weight: 800;
 }
 
+.chat-body {
+  max-height: 520px;
+  overflow-y: auto;
+  margin: 0 -4px;
+  padding: 4px 4px 10px;
+  scroll-behavior: smooth;
+}
+
 .message {
-  max-width: 86%;
+  max-width: 82%;
   border-radius: 8px;
-  padding: 12px 14px;
+  padding: 11px 13px;
   margin-bottom: 10px;
 }
 
@@ -317,7 +314,7 @@ h2 {
 }
 
 .ai-message {
-  background: #eef4ff;
+  background: #edf5ff;
 }
 
 .ai-message span {
@@ -326,7 +323,7 @@ h2 {
 
 .user-message {
   margin-left: auto;
-  background: #e8f6f0;
+  background: #e7f6ef;
 }
 
 .user-message span {
@@ -364,20 +361,41 @@ h2 {
   font-weight: 700;
 }
 
-.input-panel {
+.voice-action-panel {
   display: grid;
-  grid-template-columns: 142px minmax(0, 1fr);
+  grid-template-columns: minmax(190px, 0.8fr) minmax(0, 1fr);
   gap: 10px;
-  margin-top: 18px;
-}
-
-.compact-input-panel {
-  grid-template-columns: 132px minmax(0, 1fr);
   margin-top: 14px;
 }
 
-.compact-input-panel textarea {
-  min-height: 76px;
+.manual-input-panel {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.manual-input-panel span {
+  color: #607086;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.manual-submit-button {
+  justify-self: end;
+  min-height: 34px;
+  border: 1px solid #cbd8e6;
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #23466b;
+  background: #ffffff;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.manual-submit-button:disabled {
+  cursor: not-allowed;
+  color: #8b97a8;
+  background: #edf2f7;
 }
 
 .record-button,
@@ -395,16 +413,16 @@ h2 {
   justify-content: center;
   gap: 8px;
   align-self: stretch;
-  border: 1px solid #ffd2c8;
-  padding: 0 12px;
-  color: #9a2f1f;
-  background: #fff0ed;
+  border: 0;
+  padding: 0 18px;
+  color: #ffffff;
+  background: #2d5bd7;
+  box-shadow: 0 10px 22px rgba(45, 91, 215, 0.22);
 }
 
 .record-button.recording {
   color: #ffffff;
-  border-color: #c9362b;
-  background: #c9362b;
+  background: #167f92;
 }
 
 .record-dot {
@@ -412,7 +430,7 @@ h2 {
   height: 10px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: #e24b37;
+  background: #ffffff;
 }
 
 .record-button.recording .record-dot {
@@ -444,7 +462,6 @@ textarea:disabled {
 
 .feedback-submit-button {
   width: 100%;
-  margin-top: 10px;
   border: 0;
   color: #ffffff;
   background: #167f92;
@@ -524,7 +541,7 @@ textarea:disabled {
   margin-top: 12px;
   border: 1px solid #d7e0ea;
   border-radius: 8px;
-  padding: 12px;
+  padding: 10px 12px;
   background: #f8fbfe;
 }
 
@@ -570,7 +587,7 @@ textarea:disabled {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 .conversation-actions button {
@@ -592,22 +609,44 @@ textarea:disabled {
   font-weight: 800;
 }
 
-.feedback-stack {
+.feedback-sidebar,
+.feedback-tab-panel {
   display: grid;
   gap: 12px;
 }
 
 .feedback-center-header {
-  border: 1px solid #d6e0ea;
-  border-radius: 8px;
-  padding: 16px;
-  background: #ffffff;
-  box-shadow: 0 14px 34px rgba(31, 47, 70, 0.07);
+  padding: 14px 16px;
 }
 
 .feedback-center-header h2 {
   margin-bottom: 0;
   font-size: 1.05rem;
+}
+
+.feedback-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  border: 1px solid #d3deea;
+  border-radius: 8px;
+  padding: 4px;
+  background: #f7fafc;
+}
+
+.feedback-tabs button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 6px;
+  color: #4e5f74;
+  background: transparent;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.feedback-tabs button.active {
+  color: #ffffff;
+  background: #2d5bd7;
 }
 
 .feedback-section-heading {
@@ -630,7 +669,7 @@ textarea:disabled {
 }
 
 .feedback-card {
-  padding: 16px;
+  padding: 14px;
 }
 
 .feedback-title-row {
@@ -686,6 +725,26 @@ textarea:disabled {
   background: #fbfffd;
 }
 
+.requirement-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.requirement-tags span {
+  border: 1px solid #c6ddf4;
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #23466b;
+  background: #f3f8ff;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.compact-tags {
+  margin-top: 4px;
+}
+
 .report-kpis {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -731,6 +790,12 @@ textarea:disabled {
   padding-top: 12px;
 }
 
+.compact-correction {
+  gap: 9px;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
 .correction p {
   margin-bottom: 0;
 }
@@ -742,10 +807,10 @@ textarea:disabled {
 
 .issue-card {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   border: 1px solid #cdddf0;
   border-radius: 8px;
-  padding: 12px;
+  padding: 10px;
   background: #ffffff;
   box-shadow: 0 8px 18px rgba(27, 47, 78, 0.06);
 }
@@ -789,7 +854,7 @@ textarea:disabled {
 
 .issue-body {
   display: grid;
-  gap: 9px;
+  gap: 7px;
 }
 
 .issue-body div {
@@ -805,7 +870,11 @@ textarea:disabled {
 
 .score-row {
   display: grid;
-  gap: 7px;
+  gap: 6px;
+  border: 1px solid #e0e8f1;
+  border-radius: 8px;
+  padding: 10px;
+  background: #ffffff;
 }
 
 .score-meta {
@@ -833,7 +902,7 @@ textarea:disabled {
 .score-basis {
   margin: 0;
   color: #607086;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   line-height: 1.45;
 }
 
@@ -883,16 +952,23 @@ textarea:disabled {
   display: none;
 }
 
+.compact-pipeline {
+  grid-template-columns: 1fr;
+}
+
 @media (max-width: 900px) {
   .app-shell {
     padding: 18px;
   }
 
   .topbar,
-  .scenario-panel,
-  .mode-panel {
+  .setup-panel {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .setup-panel {
+    grid-template-columns: 1fr;
   }
 
   .scenario-tabs,
@@ -915,8 +991,7 @@ textarea:disabled {
     padding: 12px;
   }
 
-  .scenario-panel,
-  .mode-panel,
+  .setup-panel,
   .conversation-panel,
   .feedback-card {
     padding: 14px;
@@ -924,7 +999,7 @@ textarea:disabled {
 
   .scenario-tabs,
   .mode-tabs,
-  .input-panel,
+  .voice-action-panel,
   .realtime-panel,
   .training-status-card,
   .pipeline-steps,
