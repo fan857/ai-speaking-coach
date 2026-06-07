@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.ai_client import request_ai_coach_result, request_ai_summary_result, request_ai_translation_result
 from app.config import get_ai_provider_status
+from app.database import get_recent_sessions, save_session
 from app.pronunciation import assess_imitation
 from app.mock_feedback import get_mock_immersive_result, get_mock_practice_result, get_mock_pronunciation_result, get_mock_summary_result
 from app.scenarios import SCENARIOS
@@ -216,3 +217,22 @@ async def pronunciation_imitate(request: ImitateRequest) -> dict[str, Any]:
         **get_mock_pronunciation_result(request.scenarioId, reference_text, transcript),
     }
 
+
+
+@router.get("/history")
+def get_history(mode: str = "") -> dict[str, Any]:
+    sessions = get_recent_sessions(mode, 10)
+    return {"sessions": sessions}
+
+@router.post("/history/save")
+def save_history(data: dict[str, Any]) -> dict[str, Any]:
+    try:
+        session_id = save_session(data)
+        return {"id": session_id, "status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"保存失败: {str(e)}")
+
+@router.get("/recent-turns")
+def get_recent_turns(limit: int = 10) -> dict[str, Any]:
+    utterances = get_recent_utterances(limit)
+    return {"utterances": utterances}
